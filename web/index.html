@@ -3,18 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="description" content="نادي رواد الاقتصاد — Economics Pioneers Club — تطبيق بطاقة العضو ولوحة تحكم القائد">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+  <meta name="description" content="نادي رواد الاقتصاد — Economics Pioneers Club — بطاقة العضو الرقمية ولوحة القيادة">
+  <meta name="theme-color" content="#2A0A4E">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EPC">
-  <title>EPC — نادي رواد الاقتصاد | Economics Pioneers Club</title>
+  <meta property="og:title" content="نادي رواد الاقتصاد — EPC">
+  <meta property="og:description" content="بطاقة عضو رقمية قابلة للقلب ولوحة قيادة شاملة لنادي رواد الاقتصاد">
+  <title>نادي رواد الاقتصاد — Economics Pioneers Club</title>
   <link rel="icon" type="image/png" href="favicon.png"/>
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="manifest" href="manifest.json">
   <base href="$FLUTTER_BASE_HREF">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #2A0A4E;
+      font-family: -apple-system, "Segoe UI", Tahoma, sans-serif;
+      overflow: hidden;
+    }
+    #epc-splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 30% 20%, #6D28D9 0%, #4B1E8C 42%, #2A0A4E 100%);
+      z-index: 9999;
+      transition: opacity .45s ease;
+    }
+    #epc-splash img { width: 96px; height: 96px; border-radius: 50%; background: #fff; padding: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.35); }
+    #epc-splash h1 { color: #fff; font-size: 20px; margin: 18px 0 4px; font-weight: 700; }
+    #epc-splash p { color: #EBD08A; font-size: 10px; letter-spacing: 2px; margin: 0; direction: ltr; }
+    .epc-loader { margin-top: 22px; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,.22); border-top-color: #EBD08A; border-radius: 50%; animation: epcspin .9s linear infinite; }
+    @keyframes epcspin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
+  <div id="epc-splash">
+    <img src="icons/Icon-192.png" alt="EPC">
+    <h1>نادي رواد الاقتصاد</h1>
+    <p>ECONOMICS PIONEERS CLUB</p>
+    <div class="epc-loader"></div>
+  </div>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('epc-splash');
+      if (s) { s.style.opacity = '0'; setTimeout(function () { s.remove(); }, 480); }
+    });
+  </script>
 </body>
 </html>

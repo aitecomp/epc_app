@@ -6,3 +6,7 @@ build/
 *.iml
 .idea/
 android/local.properties
+android/keys/
+android/key.properties
+*.jks
+*.keystore

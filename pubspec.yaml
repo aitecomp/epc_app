@@ -1,19 +1,20 @@
 name: epc_app
-description: "نادي رواد الاقتصاد — Economics Pioneers Club — تطبيق بطاقة العضو ولوحة تحكم القائد"
+description: "EPC — نادي رواد الاقتصاد | Economics Pioneers Club"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: ^3.5.0
 
 dependencies:
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  cupertino_icons: ^1.0.8
-  shared_preferences: ^2.3.2
+  intl: any
+  shared_preferences: ^2.3.0
   image_picker: ^1.1.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -22,7 +23,20 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
   assets:
     - assets/images/logo.png
     - assets/images/banner.png
-    - assets/images/member_card_template.png
+    - assets/images/member_card.png
+
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: assets/fonts/Tajawal-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Tajawal-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Tajawal-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Tajawal-ExtraBold.ttf
+          weight: 800

@@ -1,4 +1,4 @@
-name: Build EPC App (Web + APK)
+name: Build & Deploy EPC App
 
 on:
   push:
@@ -11,10 +11,16 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: deploy-epc
   cancel-in-progress: false
 
+env:
+  FLUTTER_VERSION: '3.47.9'
+  LEADER_REG_B64: ${{ secrets.LEADER_REG_B64 }}
+  LEADER_PASS_B64: ${{ secrets.LEADER_PASS_B64 }}
+
 jobs:
+  # ── 1) تطبيق الويب: GitHub Pages + Cloudflare Pages ──────────────────
   web:
     runs-on: ubuntu-latest
     steps:
@@ -23,25 +29,63 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.24.5'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - name: Dependencies
         run: flutter pub get
 
-      - name: Build Web
-        run: flutter build web --release --base-href /epc_app/
+      - name: Build for GitHub Pages
+        run: |
+          flutter build web --release --base-href /epc_app/ \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
 
+      - name: Keep Pages build
+        run: cp -r build/web /tmp/web-github-pages
+
+      - name: Build for Cloudflare Pages
+        run: |
+          flutter build web --release --base-href / \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+
+      # ── GitHub Pages ──
       - uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        run: |
+          rm -rf build/web && cp -r /tmp/web-github-pages build/web
+          echo "ready"
 
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
 
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
 
-  apk:
+      # ── Cloudflare Pages (يُفعّل تلقائياً عند إضافة الأسرار) ──
+      - name: Check Cloudflare credentials
+        id: cf
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] && [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Cloudflare::لم يتم النشر على Cloudflare — أضف CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID في أسرار المستودع."
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.cf.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build/web --project-name=epc-club --branch=main
+
+  # ── 2) تطبيق الأندرويد: APK موقّع بمفتاح إصدار حقيقي ─────────────────
+  android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,31 +93,81 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.24.5'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Restore release keystore
+        run: |
+          mkdir -p android/keys
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/keys/epc-release.jks
+          printf 'storeFile=keys/epc-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "${{ secrets.KEYSTORE_PASSWORD }}" "${{ secrets.KEY_ALIAS }}" "${{ secrets.KEY_PASSWORD }}" > android/key.properties
+          cat android/key.properties | sed 's/storePassword=.*/storePassword=***/'
 
       - name: Dependencies
         run: flutter pub get
 
-      - name: Build Android APK
-        run: flutter build apk --release
+      - name: Build signed APK (universal)
+        run: |
+          flutter build apk --release \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+
+      - name: Build signed APK (arm64 — حجم أصغر)
+        run: |
+          flutter build apk --release --target-platform android-arm64 --split-per-abi \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/epc-arm64.apk || true
+
+      - name: Build Play Store bundle (AAB)
+        run: |
+          flutter build appbundle --release \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+
+      - name: Verify signing
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -E "META-INF/(CERT|.*\.RSA)" || true
+          echo "--- verifying signature with apksigner if available ---"
+          BT=$(ls -d $ANDROID_SDK_ROOT/build-tools/* 2>/dev/null | sort -V | tail -1)
+          if [ -n "$BT" ] && [ -x "$BT/apksigner" ]; then
+            "$BT/apksigner" verify --verbose --print-certs "$APK" | head -20
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: epc-app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: epc-android
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/epc-arm64.apk
+            build/app/outputs/bundle/release/app-release.aab
 
-      - name: Publish APK to Releases
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: EPC App v1.0.0 — نادي رواد الاقتصاد
+          tag_name: v1.1.0
+          name: EPC App v1.1.0 — نادي رواد الاقتصاد
           body: |
-            تحميل تطبيق نادي رواد الاقتصاد (Android APK).
-            حساب القائد التجريبي: 000000 / admin123
-          files: build/app/outputs/flutter-apk/app-release.apk
-          fail_on_unmatched_files: true
+            ## تطبيق نادي رواد الاقتصاد — Economics Pioneers Club
+
+            **تحميل الأندرويد:**
+            - `app-release.apk` — يعمل على جميع الهواتف (الحجم الأكبر)
+            - `epc-arm64.apk` — للهواتف الحديثة (حجم أصغر) ← يُنصح به
+            - `app-release.aab` — لنشر التطبيق على Google Play
+
+            **الويب:** https://aitecomp.github.io/epc_app/
+
+            > الدخول متاح للقائد والأعضاء المسجَّلين. بيانات الدخول لا تُعرض داخل التطبيق.
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/epc-arm64.apk
+            build/app/outputs/bundle/release/app-release.aab
+          fail_on_unmatched_files: false
