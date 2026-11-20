@@ -40,8 +40,13 @@
 
 ## 🌐 الموقع والتطبيق
 
-- **الموقع (Web):** يُنشر تلقائياً عبر GitHub Pages بعد نجاح الـ Workflow — الرابط يظهر في صفحة المستودع على GitHub (قسم About / Pages) بصيغة: `https://aitecomp.github.io/epc_app/`
-- **تطبيق Android (APK):** يُبنى تلقائياً ويُرفع في **Releases** — حمّل `app-release.apk` وثبّته على هاتفك
+| ماذا | الرابط |
+|---|---|
+| 🌐 **الموقع / التطبيق (يعمل مباشرة على المتصفح والهاتف)** | https://aitecomp.github.io/epc_app/ |
+| 📦 **كود المشروع (GitHub)** | https://github.com/aitecomp/epc_app |
+| 📱 **ملف APK للأندرويد** | https://github.com/aitecomp/epc_app/releases/download/v1.0.0/app-release.apk |
+
+> الموقع والتطبيق يتم بناؤهما ونشرهما **تلقائياً** عبر GitHub Actions عند كل تعديل على الفرع `main`.
 
 ## 🚀 البناء المحلي
 
