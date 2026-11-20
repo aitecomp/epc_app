@@ -9,6 +9,8 @@ class OverviewTab extends StatelessWidget {
   final VoidCallback onAddMember;
   final void Function(Member) onOpenMember;
   final VoidCallback onSeeAll;
+  final VoidCallback onOpenMembers;
+  final VoidCallback onOpenSettings;
 
   const OverviewTab({
     super.key,
@@ -16,6 +18,8 @@ class OverviewTab extends StatelessWidget {
     required this.onAddMember,
     required this.onOpenMember,
     required this.onSeeAll,
+    required this.onOpenMembers,
+    required this.onOpenSettings,
   });
 
   @override
@@ -32,37 +36,46 @@ class OverviewTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.55,
+              Row(
                 children: [
-                  _StatTile(
-                    icon: Icons.groups_2_outlined,
-                    label: 'الأعضاء',
-                    value: '${store.totalMembers}',
-                    tint: AppColors.purple,
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.groups_2_outlined,
+                      label: 'الأعضاء',
+                      value: '${store.totalMembers}',
+                      tint: AppColors.purple,
+                    ),
                   ),
-                  _StatTile(
-                    icon: Icons.account_tree_outlined,
-                    label: 'التخصصات',
-                    value: '${store.specializationsCount}',
-                    tint: const Color(0xFF0E7490),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.account_tree_outlined,
+                      label: 'التخصصات',
+                      value: '${store.specializationsCount}',
+                      tint: const Color(0xFF0E7490),
+                    ),
                   ),
-                  _StatTile(
-                    icon: Icons.workspace_premium_outlined,
-                    label: 'الصفات القيادية',
-                    value: '${store.leadersCount}',
-                    tint: AppColors.gold,
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.workspace_premium_outlined,
+                      label: 'الصفات القيادية',
+                      value: '${store.leadersCount}',
+                      tint: AppColors.gold,
+                    ),
                   ),
-                  _StatTile(
-                    icon: Icons.photo_camera_outlined,
-                    label: 'صور مكتملة',
-                    value: '${store.withPhotoCount}',
-                    tint: const Color(0xFF15803D),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatTile(
+                      icon: Icons.photo_camera_outlined,
+                      label: 'صور مكتملة',
+                      value: '${store.withPhotoCount}',
+                      tint: const Color(0xFF15803D),
+                    ),
                   ),
                 ],
               ),
@@ -89,8 +102,9 @@ class OverviewTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 SectionCard(
-                  title: 'التوزيع حسب السنة الجامعية',
-                  child: _bars(store.byYear, AppColors.gold),
+                  title: 'التوزيع حسب المستوى الدراسي',
+                  trailing: ChipTag(text: store.members.first.year, color: AppColors.gold),
+                  child: _bars(store.byLevel, AppColors.gold),
                 ),
                 const SizedBox(height: 16),
                 SectionCard(
@@ -256,6 +270,28 @@ class OverviewTab extends StatelessWidget {
             'تابع أعضاءك، تخصصاتهم، وتوزيعهم الدراسي من مكان واحد.',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.70), fontSize: 12.5, height: 1.6),
           ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _QuickAction(
+                icon: Icons.groups_2_outlined,
+                label: 'الأعضاء',
+                onTap: onOpenMembers,
+              ),
+              const SizedBox(width: 10),
+              _QuickAction(
+                icon: Icons.person_add_alt_1,
+                label: 'إضافة عضو',
+                onTap: onAddMember,
+              ),
+              const SizedBox(width: 10),
+              _QuickAction(
+                icon: Icons.settings_outlined,
+                label: 'الإعدادات',
+                onTap: onOpenSettings,
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -278,6 +314,7 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 108,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -313,6 +350,44 @@ class _StatTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickAction({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 18, color: AppColors.goldSoft),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

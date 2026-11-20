@@ -9,7 +9,11 @@ import '../core/theme.dart';
 
 class MemberFormScreen extends StatefulWidget {
   final Member? member;
-  const MemberFormScreen({super.key, this.member});
+
+  /// وضع بطاقة القائد: يحفظ في ملف القائد ولا يطلب بيانات الدخول
+  final bool leaderMode;
+
+  const MemberFormScreen({super.key, this.member, this.leaderMode = false});
 
   @override
   State<MemberFormScreen> createState() => _MemberFormScreenState();
@@ -26,6 +30,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
   late final TextEditingController _phone;
   late final TextEditingController _email;
 
+  late String _branch;
   late String _specialization;
   late String _level;
   late String _year;
@@ -45,9 +50,10 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
     _pass = TextEditingController(text: m?.password ?? '');
     _phone = TextEditingController(text: m?.phone ?? '');
     _email = TextEditingController(text: m?.email ?? '');
-    _specialization = m?.specialization ?? kSpecializations.first;
+    _branch = m?.branch ?? kCommonTrunk;
+    _specialization = m?.specialization ?? kCommonTrunkProgram;
     _level = m?.level ?? kLevels.first;
-    _year = m?.year ?? kYears.first;
+    _year = m?.year ?? kAcademicYear;
     _role = m?.role ?? kRoles.first;
     _photo = m?.photoBase64 ?? '';
   }
@@ -91,6 +97,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
       firstName: _first.text.trim(),
       lastName: _last.text.trim(),
       specialization: _specialization,
+      branch: _branch,
       level: _level,
       year: _year,
       regNumber: reg,
@@ -102,7 +109,11 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
       joinedAt: widget.member?.joinedAt,
     );
 
-    await MemberStore.instance.saveMember(member);
+    if (widget.leaderMode) {
+      await MemberStore.instance.saveLeaderProfile(member);
+    } else {
+      await MemberStore.instance.saveMember(member);
+    }
     if (!mounted) return;
     setState(() => _saving = false);
     Navigator.of(context).pop(true);
@@ -121,7 +132,9 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
           icon: const Icon(Icons.close, color: AppColors.ink),
         ),
         title: Text(
-          isEdit ? 'تعديل بيانات العضو' : 'إضافة عضو جديد',
+          widget.leaderMode
+              ? 'تعديل بطاقة القائد'
+              : (isEdit ? 'تعديل بيانات العضو' : 'إضافة عضو جديد'),
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
         ),
       ),
@@ -152,20 +165,59 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
             ),
             const SizedBox(height: 16),
             SectionCard(
-              title: 'المسار الجامعي',
+              title: 'المسار الجامعي — جامعة غيليزان',
               child: Column(
                 children: [
-                  _dropdown('التخصص', kSpecializations, _specialization, (v) => setState(() => _specialization = v)),
+                  _dropdown('الشعبة', kBranches, _branch, (v) {
+                    setState(() {
+                      _branch = v;
+                      _specialization = kPrograms[v]!.first;
+                    });
+                  }, icon: Icons.account_tree_outlined),
                   const SizedBox(height: 14),
-                  _dropdown('المستوى الدراسي', kLevels, _level, (v) => setState(() => _level = v)),
+                  _dropdown('التخصص', kPrograms[_branch] ?? const [kCommonTrunkProgram],
+                      kPrograms[_branch]!.contains(_specialization)
+                          ? _specialization
+                          : kPrograms[_branch]!.first,
+                      (v) => setState(() => _specialization = v),
+                      icon: Icons.school_outlined),
                   const SizedBox(height: 14),
-                  _dropdown('السنة الجامعية', kYears, _year, (v) => setState(() => _year = v)),
+                  _dropdown('المستوى الدراسي', kLevels, _level, (v) => setState(() => _level = v),
+                      icon: Icons.trending_up),
                   const SizedBox(height: 14),
-                  _dropdown('الصفة في النادي', kRoles, _role, (v) => setState(() => _role = v)),
+                  _dropdown('السنة الجامعية', kAcademicYears, _year,
+                      (v) => setState(() => _year = v), icon: Icons.calendar_month_outlined),
+                  const SizedBox(height: 14),
+                  _dropdown('الصفة في النادي', kRoles, _role, (v) => setState(() => _role = v),
+                      icon: Icons.workspace_premium_outlined),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.softViolet,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, size: 16, color: AppColors.purple),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _branch == kCommonTrunk
+                                ? 'طلبة السنة الأولى يدرسون في الجذع المشترك ثم يختارون الشعبة.'
+                                : 'الشعبة: $_branch — التخصص: $_specialization',
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
+            if (!widget.leaderMode) ...[
             SectionCard(
               title: 'بيانات الدخول',
               child: Column(
@@ -199,6 +251,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
                 ],
               ),
             ),
+            ],
             const SizedBox(height: 24),
             PrimaryButton(
               label: isEdit ? 'حفظ التعديلات' : 'إضافة العضو',
@@ -295,7 +348,8 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
     );
   }
 
-  Widget _dropdown(String label, List<String> items, String value, ValueChanged<String> onChanged) {
+  Widget _dropdown(String label, List<String> items, String value, ValueChanged<String> onChanged,
+      {IconData icon = Icons.school_outlined}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -306,7 +360,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
           isExpanded: true,
           icon: const Icon(Icons.expand_more, color: AppColors.purple),
           style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink, fontSize: 14),
-          decoration: const InputDecoration(prefixIcon: Icon(Icons.school_outlined, size: 19, color: AppColors.purple)),
+          decoration: InputDecoration(prefixIcon: Icon(icon, size: 19, color: AppColors.purple)),
           items: items.map((e) => DropdownMenuItem<String>(value: e, child: Text(e))).toList(),
           onChanged: (v) {
             if (v != null) onChanged(v);

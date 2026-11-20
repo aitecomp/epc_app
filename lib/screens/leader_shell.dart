@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
+import '../widgets/glass_nav.dart';
+import 'leader_profile_tab.dart';
 import 'member_detail_screen.dart';
 import 'member_form_screen.dart';
 import 'members_tab.dart';
@@ -24,15 +26,55 @@ class _LeaderShellState extends State<LeaderShell> {
 
   MemberStore get store => widget.store;
 
-  Future<void> _openForm({Member? member}) async {
+  Future<void> _openForm({Member? member, bool leaderMode = false}) async {
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => MemberFormScreen(member: member)),
+      MaterialPageRoute(
+        builder: (_) => MemberFormScreen(member: member, leaderMode: leaderMode),
+      ),
     );
     if (saved == true && mounted) {
       setState(() {});
-      CloudSync.pushInBackground(store);
-      toast(context, member == null ? 'تمت إضافة العضو بنجاح' : 'تم حفظ التعديلات');
+      if (!leaderMode) CloudSync.pushInBackground(store);
+      toast(
+        context,
+        leaderMode
+            ? 'تم تحديث بطاقتك'
+            : (member == null ? 'تمت إضافة العضو بنجاح' : 'تم حفظ التعديلات'),
+      );
     }
+  }
+
+  void _openMembers() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.cream,
+          body: MembersTab(
+            store: store,
+            onBack: () => Navigator.pop(context),
+            onAddMember: () => _openForm(),
+            onOpenMember: _openMember,
+            onEditMember: (m) => _openForm(member: m),
+            onDeleteMember: _confirmDelete,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.cream,
+          body: SettingsTab(
+            store: store,
+            onBack: () => Navigator.pop(context),
+            onLogout: widget.onLogout,
+          ),
+        ),
+      ),
+    );
   }
 
   void _openMember(Member member) {
@@ -86,75 +128,40 @@ class _LeaderShellState extends State<LeaderShell> {
         store: store,
         onAddMember: () => _openForm(),
         onOpenMember: _openMember,
-        onSeeAll: () => setState(() => _index = 1),
+        onSeeAll: _openMembers,
+        onOpenMembers: _openMembers,
+        onOpenSettings: _openSettings,
       ),
-      MembersTab(
+      LeaderProfileTab(
         store: store,
-        onAddMember: () => _openForm(),
-        onOpenMember: _openMember,
-        onEditMember: (m) => _openForm(member: m),
-        onDeleteMember: _confirmDelete,
+        onEditProfile: () => _openForm(member: store.leaderMember, leaderMode: true),
+        onOpenSettings: _openSettings,
+        onLogout: widget.onLogout,
       ),
-      SettingsTab(store: store, onLogout: widget.onLogout),
     ];
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: AppColors.cream,
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         child: KeyedSubtree(key: ValueKey(_index), child: tabs[_index]),
       ),
-      floatingActionButton: _index == 2
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _openForm(),
-              backgroundColor: AppColors.purple,
-              foregroundColor: Colors.white,
-              elevation: 4,
-              icon: const Icon(Icons.person_add_alt_1, size: 20),
-              label: const Text('عضو جديد',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-            ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.plum.withValues(alpha: 0.07),
-              blurRadius: 18,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            height: 66,
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-            indicatorColor: AppColors.softViolet,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined, color: AppColors.muted),
-                selectedIcon: Icon(Icons.dashboard, color: AppColors.purple),
-                label: 'لوحة القيادة',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.groups_2_outlined, color: AppColors.muted),
-                selectedIcon: Icon(Icons.groups_2, color: AppColors.purple),
-                label: 'الأعضاء',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined, color: AppColors.muted),
-                selectedIcon: Icon(Icons.settings, color: AppColors.purple),
-                label: 'الإعدادات',
-              ),
-            ],
+      bottomNavigationBar: GlassNavBar(
+        index: _index,
+        onTap: (i) => setState(() => _index = i),
+        items: const [
+          GlassNavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: 'الرئيسية',
           ),
-        ),
+          GlassNavItem(
+            icon: Icons.person_outline,
+            activeIcon: Icons.person_rounded,
+            label: 'البروفيل',
+          ),
+        ],
       ),
     );
   }

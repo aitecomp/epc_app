@@ -3,20 +3,76 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// ── خيارات النادي ──────────────────────────────────────────────────────
-const List<String> kSpecializations = [
-  'اقتصاد',
-  'تسيير مالي ومحاسبة',
-  'إدارة أعمال',
-  'مالية وبنوك',
-  'تجارة دولية',
-  'اقتصاد قياسي',
-  'إحصاء تطبيقي',
-  'أخرى',
+/// ── خيارات النادي (جامعة غيليزان — كلية العلوم الاقتصادية والتجارية وعلوم التسيير) ──
+
+/// السنة الجامعية الحالية
+const String kAcademicYear = '2026/2027';
+const List<String> kAcademicYears = ['2026/2027', '2025/2026'];
+
+/// الشعب (الأقسام) — مع الجذع المشترك للسنة الأولى
+const String kCommonTrunk = 'جذع مشترك';
+const String kCommonTrunkProgram = 'جذع مشترك — علوم اقتصادية وتجارية وعلوم التسيير';
+
+const Map<String, List<String>> kPrograms = {
+  kCommonTrunk: [kCommonTrunkProgram],
+  'العلوم الاقتصادية': [
+    'اقتصاد وتسيير المؤسسات',
+    'اقتصاد نقدي وبنكي',
+    'اقتصاد دولي',
+    'اقتصاد كمي',
+    'اقتصاد رقمي',
+  ],
+  'العلوم التجارية': [
+    'تسويق',
+    'مالية وتجارة دولية',
+    'علوم تجارية',
+    'تجارة إلكترونية',
+  ],
+  'علوم التسيير': [
+    'إدارة أعمال',
+    'إدارة مالية',
+    'إدارة الموارد البشرية',
+    'إدارة إلكترونية',
+    'تسيير عمومي',
+  ],
+  'العلوم المالية والمحاسبية': [
+    'محاسبة',
+    'مالية',
+    'مالية المؤسسة',
+    'مالية وبنوك',
+    'محاسبة وتدقيق',
+    'محاسبة وجباية',
+    'تكنولوجيا مالية',
+  ],
+};
+
+List<String> get kBranches => kPrograms.keys.toList();
+
+List<String> get kSpecializations =>
+    kPrograms.values.expand((e) => e).toList(growable: false);
+
+String branchOfProgram(String program) {
+  for (final entry in kPrograms.entries) {
+    if (entry.value.contains(program)) return entry.key;
+  }
+  return kPrograms.keys.first;
+}
+
+/// المستويات الدراسية (نظام ل.م.د)
+const List<String> kLevels = [
+  'السنة الأولى (L1)',
+  'السنة الثانية (L2)',
+  'السنة الثالثة (L3)',
+  'ماستر 1 (M1)',
+  'ماستر 2 (M2)',
+  'دكتوراه',
 ];
 
-const List<String> kLevels = ['ليسانس 1', 'ليسانس 2', 'ليسانس 3', 'ماستر 1', 'ماستر 2', 'دكتوراه'];
-const List<String> kYears = ['السنة الأولى', 'السنة الثانية', 'السنة الثالثة', 'السنة الرابعة', 'السنة الخامسة'];
+const List<String> kLevelShort = ['L1', 'L2', 'L3', 'M1', 'M2', 'دكتوراه'];
+
+/// للتوافق مع النسخ السابقة
+const List<String> kYears = kAcademicYears;
+
 const List<String> kRoles = ['عضو', 'عضو أساسي', 'نائب القائد', 'أمين عام', 'القائد'];
 
 /// بيانات القائد مُشفّرة ولا تظهر في الكود بشكل مباشر،
@@ -40,6 +96,7 @@ class Member {
   String firstName;
   String lastName;
   String specialization;
+  String branch;
   String level;
   String year;
   String regNumber;
@@ -56,6 +113,7 @@ class Member {
     required this.firstName,
     required this.lastName,
     required this.specialization,
+    String? branch,
     required this.level,
     required this.year,
     required this.regNumber,
@@ -66,8 +124,9 @@ class Member {
     this.photoBase64 = '',
     DateTime? joinedAt,
     DateTime? updatedAt,
-  }) : joinedAt = joinedAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
+  })  : branch = branch ?? branchOfProgram(specialization),
+        joinedAt = joinedAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -75,6 +134,14 @@ class Member {
     final first = firstName.trim().isEmpty ? '' : firstName.trim()[0];
     final last = lastName.trim().isEmpty ? '' : lastName.trim()[0];
     return '$first$last';
+  }
+
+  /// التخصص بصيغة قصيرة مناسبة للبطاقة
+  String get displaySpecialization {
+    if (branch == kCommonTrunk || specialization == kCommonTrunkProgram) {
+      return 'جذع مشترك';
+    }
+    return specialization;
   }
 
   String get joinedLabel =>
@@ -85,6 +152,7 @@ class Member {
         'firstName': firstName,
         'lastName': lastName,
         'specialization': specialization,
+        'branch': branch,
         'level': level,
         'year': year,
         'regNumber': regNumber,
@@ -101,9 +169,12 @@ class Member {
         id: (json['id'] ?? '').toString(),
         firstName: (json['firstName'] ?? '').toString(),
         lastName: (json['lastName'] ?? '').toString(),
-        specialization: (json['specialization'] ?? kSpecializations.first).toString(),
+        specialization: (json['specialization'] ?? kCommonTrunkProgram).toString(),
+        branch: (json['branch'] ?? '').toString().isEmpty
+            ? branchOfProgram((json['specialization'] ?? kCommonTrunkProgram).toString())
+            : (json['branch'] ?? '').toString(),
         level: (json['level'] ?? kLevels.first).toString(),
-        year: (json['year'] ?? kYears.first).toString(),
+        year: (json['year'] ?? kAcademicYear).toString(),
         regNumber: (json['regNumber'] ?? '').toString(),
         password: (json['password'] ?? '').toString(),
         phone: (json['phone'] ?? '').toString(),
@@ -127,9 +198,11 @@ class MemberStore extends ChangeNotifier {
   static const _kLeaderReg = 'epc_leader_reg';
   static const _kLeaderPass = 'epc_leader_pass';
   static const _kDeleted = 'epc_deleted_v2';
+  static const _kLeaderProfile = 'epc_leader_profile';
 
   final List<Member> _members = [];
   final Map<String, DateTime> _deleted = {};
+  Member? _leaderProfile;
   SharedPreferences? _prefs;
   bool ready = false;
 
@@ -178,6 +251,16 @@ class MemberStore extends ChangeNotifier {
         }
       } catch (_) {}
     }
+    final leaderRaw = _prefs!.getString(_kLeaderProfile);
+    if (leaderRaw != null && leaderRaw.isNotEmpty) {
+      try {
+        _leaderProfile = Member.fromJson(
+          Map<String, dynamic>.from(jsonDecode(leaderRaw) as Map),
+        );
+      } catch (_) {}
+    }
+
+    _migrateMembers();
     _members.sort((a, b) => a.fullName.compareTo(b.fullName));
 
     final deletedRaw = _prefs!.getString(_kDeleted);
@@ -193,6 +276,40 @@ class MemberStore extends ChangeNotifier {
 
     ready = true;
     notifyListeners();
+  }
+
+  /// ترقية البيانات القديمة إلى السنة الجامعية الجديدة والمصطلحات الجديدة
+  void _migrateMembers() {
+    for (final m in _members) {
+      if (!m.year.contains('/')) {
+        m.year = kAcademicYear;
+      }
+      if (m.branch.isEmpty) {
+        m.branch = branchOfProgram(m.specialization);
+      }
+      if (!kLevels.contains(m.level)) {
+        final old = m.level;
+        if (old.contains('ليسانس 1') || old.contains('ليسانس1')) {
+          m.level = kLevels[0];
+        } else if (old.contains('ليسانس 2')) {
+          m.level = kLevels[1];
+        } else if (old.contains('ليسانس 3')) {
+          m.level = kLevels[2];
+        } else if (old.contains('ماستر 1')) {
+          m.level = kLevels[3];
+        } else if (old.contains('ماستر 2')) {
+          m.level = kLevels[4];
+        } else if (old.contains('دكتور')) {
+          m.level = kLevels[5];
+        } else {
+          m.level = kLevels.first;
+        }
+      }
+      if (!kSpecializations.contains(m.specialization)) {
+        m.specialization = kCommonTrunkProgram;
+        m.branch = kCommonTrunk;
+      }
+    }
   }
 
   Future<void> _persist() async {
@@ -327,6 +444,35 @@ class MemberStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// بطاقة القائد (تُعرض في تبويب البروفيل)
+  Member get leaderMember {
+    final base = _leaderProfile;
+    if (base != null) {
+      base.regNumber = leaderReg;
+      base.role = 'القائد';
+      return base;
+    }
+    return Member(
+      id: 'leader',
+      firstName: 'قائد',
+      lastName: 'النادي',
+      specialization: kPrograms['علوم التسيير']!.first,
+      branch: 'علوم التسيير',
+      level: kLevels[2],
+      year: kAcademicYear,
+      regNumber: leaderReg,
+      password: '',
+      role: 'القائد',
+    );
+  }
+
+  Future<void> saveLeaderProfile(Member member) async {
+    member.updatedAt = DateTime.now();
+    _leaderProfile = member;
+    await _prefs?.setString(_kLeaderProfile, jsonEncode(member.toJson()));
+    notifyListeners();
+  }
+
   Future<void> resetClub() async {
     _members.clear();
     await _persist();
@@ -343,7 +489,15 @@ class MemberStore extends ChangeNotifier {
   Map<String, int> get bySpecialization {
     final map = <String, int>{};
     for (final m in _members) {
-      map[m.specialization] = (map[m.specialization] ?? 0) + 1;
+      map[m.displaySpecialization] = (map[m.displaySpecialization] ?? 0) + 1;
+    }
+    return map;
+  }
+
+  Map<String, int> get byBranch {
+    final map = <String, int>{};
+    for (final m in _members) {
+      map[m.branch] = (map[m.branch] ?? 0) + 1;
     }
     return map;
   }

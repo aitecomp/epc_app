@@ -8,8 +8,9 @@ import '../core/theme.dart';
 class SettingsTab extends StatefulWidget {
   final MemberStore store;
   final VoidCallback onLogout;
+  final VoidCallback? onBack;
 
-  const SettingsTab({super.key, required this.store, required this.onLogout});
+  const SettingsTab({super.key, required this.store, required this.onLogout, this.onBack});
 
   @override
   State<SettingsTab> createState() => _SettingsTabState();
@@ -135,13 +136,26 @@ class _SettingsTabState extends State<SettingsTab> {
               bottomRight: Radius.circular(30),
             ),
           ),
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('الإعدادات',
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-              SizedBox(height: 4),
-              Text('إدارة بيانات الدخول والبيانات العامة للنادي',
+              Row(
+                children: [
+                  if (widget.onBack != null)
+                    IconButton(
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                  const Expanded(
+                    child: Text('الإعدادات',
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text('إدارة بيانات الدخول والبيانات العامة للنادي',
                   style: TextStyle(color: Colors.white70, fontSize: 12.5)),
             ],
           ),

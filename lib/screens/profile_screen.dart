@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
+import '../widgets/glass_nav.dart';
 import '../widgets/member_card.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _picker = ImagePicker();
   bool _busy = false;
+  int _index = 0;
 
   Future<void> _changePhoto() async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -81,67 +83,138 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final m = widget.member;
     return Scaffold(
+      extendBody: true,
       backgroundColor: AppColors.cream,
-      body: RefreshIndicator(
-        onRefresh: () async => setState(() {}),
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            _header(m),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 26),
-              child: Column(
-                children: [
-                  MemberCardFlip(member: m),
-                  const SizedBox(height: 20),
-                  SectionCard(
-                    title: 'معلومات العضوية',
-                    child: Column(
-                      children: [
-                        _row(Icons.school_outlined, 'التخصص', m.specialization),
-                        _row(Icons.trending_up, 'المستوى الدراسي', m.level),
-                        _row(Icons.calendar_month_outlined, 'السنة الجامعية', m.year),
-                        _row(Icons.badge_outlined, 'رقم التسجيل', m.regNumber),
-                        _row(Icons.workspace_premium_outlined, 'الصفة', m.role, last: true),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
+      body: IndexedStack(
+        index: _index,
+        children: [_homeTab(), _accountTab()],
+      ),
+      bottomNavigationBar: GlassNavBar(
+        index: _index,
+        onTap: (i) => setState(() => _index = i),
+        items: const [
+          GlassNavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: 'الرئيسية',
+          ),
+          GlassNavItem(
+            icon: Icons.person_outline,
+            activeIcon: Icons.person_rounded,
+            label: 'البروفيل',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── الرئيسية: البطاقة ──
+  Widget _homeTab() {
+    final m = widget.member;
+    return RefreshIndicator(
+      onRefresh: () async => setState(() {}),
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          _header(m),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
+            child: Column(
+              children: [
+                MemberCardFlip(member: m),
+                const SizedBox(height: 20),
+                SectionCard(
+                  title: 'معلومات العضوية',
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: GhostButton(
-                          label: _busy ? 'جارٍ...' : 'تغيير الصورة',
-                          icon: Icons.photo_camera_outlined,
-                          onPressed: _busy ? null : _changePhoto,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SizedBox(
-                          height: 50,
-                          child: OutlinedButton.icon(
-                            onPressed: widget.onLogout,
-                            icon: const Icon(Icons.logout, size: 19),
-                            label: const Text('خروج', style: TextStyle(fontWeight: FontWeight.w700)),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFB91C1C),
-                              side: BorderSide(color: const Color(0xFFB91C1C).withValues(alpha: 0.35)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                          ),
-                        ),
-                      ),
+                      _row(Icons.account_tree_outlined, 'الشعبة', m.branch),
+                      _row(Icons.school_outlined, 'التخصص', m.displaySpecialization),
+                      _row(Icons.trending_up, 'المستوى الدراسي', m.level),
+                      _row(Icons.calendar_month_outlined, 'السنة الجامعية', m.year),
+                      _row(Icons.badge_outlined, 'رقم التسجيل', m.regNumber),
+                      _row(Icons.workspace_premium_outlined, 'الصفة', m.role, last: true),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  // ── البروفيل: الحساب ──
+  Widget _accountTab() {
+    final m = widget.member;
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _header(m),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
+          child: Column(
+            children: [
+              SectionCard(
+                title: 'بياناتي',
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        MemberAvatar(member: m, size: 62),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(m.fullName,
+                                  style: const TextStyle(
+                                      fontSize: 16, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 3),
+                              Text('${m.displaySpecialization} • ${m.level}',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: AppColors.muted)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Divider(height: 22),
+                    _row(Icons.badge_outlined, 'رقم التسجيل', m.regNumber),
+                    _row(Icons.phone_outlined, 'الهاتف', m.phone.isEmpty ? '—' : m.phone),
+                    _row(Icons.mail_outline, 'البريد',
+                        m.email.isEmpty ? '—' : m.email),
+                    _row(Icons.event_available_outlined, 'تاريخ الانضمام', m.joinedLabel, last: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              GhostButton(
+                label: _busy ? 'جارٍ...' : 'تغيير الصورة',
+                icon: Icons.photo_camera_outlined,
+                onPressed: _busy ? null : _changePhoto,
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 50,
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: widget.onLogout,
+                  icon: const Icon(Icons.logout, size: 19),
+                  label: const Text('تسجيل الخروج', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB91C1C),
+                    side: BorderSide(color: const Color(0xFFB91C1C).withValues(alpha: 0.35)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -176,18 +249,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'بطاقة العضو',
-                      style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      'Economics Pioneers Club',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.65),
-                        fontSize: 10,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
+                    const Text('بطاقة العضو',
+                        style: TextStyle(
+                            color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                    Text('Economics Pioneers Club',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.65),
+                            fontSize: 10,
+                            letterSpacing: 1.2)),
                   ],
                 ),
               ),
@@ -205,22 +274,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       SizedBox(width: 4),
                       Text('القائد',
                           style: TextStyle(
-                              color: AppColors.goldSoft, fontSize: 11, fontWeight: FontWeight.w800)),
+                              color: AppColors.goldSoft,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800)),
                     ],
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 22),
-          Text(
-            'مرحباً، ${m.fullName}',
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800),
-          ),
+          Text('مرحباً، ${m.fullName}',
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text(
-            '${m.specialization} • ${m.level}',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 13),
-          ),
+          Text('${m.displaySpecialization} • ${m.level} • ${m.year}',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 13)),
         ],
       ),
     );
@@ -238,7 +306,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 10),
           Text(label, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
           const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+          Flexible(
+            child: Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.left,
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+          ),
         ],
       ),
     );

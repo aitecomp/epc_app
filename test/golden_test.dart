@@ -75,4 +75,55 @@ void main() {
       matchesGoldenFile('golden/card_front.png'),
     );
   });
+
+  testWidgets('golden: الوجه الخلفي للبطاقة', (tester) async {
+    await loadFonts();
+    final member = Member(
+      id: '1',
+      firstName: 'محمد',
+      lastName: 'بن عيسى',
+      specialization: 'اقتصاد نقدي وبنكي',
+      level: 'السنة الثالثة (L3)',
+      year: '2026/2027',
+      regNumber: '20260001',
+      password: 'x',
+      phone: '0551234567',
+      email: 'mohamed@epc.dz',
+      role: 'عضو أساسي',
+    );
+
+    tester.view.physicalSize = const Size(400, 700);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.build(),
+        builder: (c, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
+        home: Scaffold(
+          backgroundColor: AppColors.cream,
+          body: RepaintBoundary(
+            key: const ValueKey('cardback'),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(child: MemberCardFlip(member: member, initiallyFlipped: true)),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.runAsync(() async {
+      await precacheImage(
+        const AssetImage('assets/images/member_card.png'),
+        tester.element(find.byType(MemberCardFlip)),
+      );
+    });
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byKey(const ValueKey('cardback')),
+      matchesGoldenFile('golden/card_back.png'),
+    );
+  });
 }

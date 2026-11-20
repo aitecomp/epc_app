@@ -6,6 +6,7 @@ import '../widgets/member_card.dart';
 
 class MembersTab extends StatefulWidget {
   final MemberStore store;
+  final VoidCallback? onBack;
   final VoidCallback onAddMember;
   final void Function(Member) onOpenMember;
   final void Function(Member) onEditMember;
@@ -14,6 +15,7 @@ class MembersTab extends StatefulWidget {
   const MembersTab({
     super.key,
     required this.store,
+    this.onBack,
     required this.onAddMember,
     required this.onOpenMember,
     required this.onEditMember,
@@ -28,7 +30,7 @@ class _MembersTabState extends State<MembersTab> {
   final _search = TextEditingController();
   String _query = '';
   String? _spec;
-  String? _year;
+  String? _branch;
 
   @override
   void initState() {
@@ -51,11 +53,16 @@ class _MembersTabState extends State<MembersTab> {
             m.regNumber.contains(q) ||
             m.phone.contains(q) ||
             m.email.toLowerCase().contains(q) ||
-            m.specialization.toLowerCase().contains(q);
+            m.specialization.toLowerCase().contains(q) ||
+            m.branch.toLowerCase().contains(q);
       }).toList();
     }
     if (_spec != null) list = list.where((m) => m.specialization == _spec).toList();
-    if (_year != null) list = list.where((m) => m.year == _year).toList();
+    if (_branch != null) {
+      list = list.where((m) =>
+          m.branch == _branch ||
+          m.displaySpecialization == _branch).toList();
+    }
     return list;
   }
 
@@ -79,6 +86,13 @@ class _MembersTabState extends State<MembersTab> {
             children: [
               Row(
                 children: [
+                  if (widget.onBack != null)
+                    IconButton(
+                      onPressed: widget.onBack,
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
                   const Expanded(
                     child: Text('أعضاء النادي',
                         style: TextStyle(
@@ -133,16 +147,16 @@ class _MembersTabState extends State<MembersTab> {
               ),
               const SizedBox(width: 8),
               _filterChip(
-                label: _year ?? 'كل السنوات',
-                active: _year != null,
+                label: _branch ?? 'كل الشعب',
+                active: _branch != null,
                 onTap: () => _pick(
-                  title: 'السنة الجامعية',
-                  items: kYears,
-                  current: _year,
-                  onSelected: (v) => setState(() => _year = v),
+                  title: 'الشعبة',
+                  items: kBranches,
+                  current: _branch,
+                  onSelected: (v) => setState(() => _branch = v),
                 ),
               ),
-              if (_spec != null || _year != null) ...[
+              if (_spec != null || _branch != null) ...[
                 const SizedBox(width: 8),
                 _filterChip(
                   label: 'إزالة الفلاتر',
@@ -150,7 +164,7 @@ class _MembersTabState extends State<MembersTab> {
                   icon: Icons.filter_alt_off_outlined,
                   onTap: () => setState(() {
                     _spec = null;
-                    _year = null;
+                    _branch = null;
                   }),
                 ),
               ],
@@ -317,7 +331,7 @@ class _MemberTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        ChipTag(text: member.specialization, icon: Icons.school_outlined),
+                        ChipTag(text: member.displaySpecialization, icon: Icons.school_outlined),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(member.regNumber,
