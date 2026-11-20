@@ -28,7 +28,7 @@ class OverviewTab extends StatelessWidget {
       children: [
         _header(context),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 110),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

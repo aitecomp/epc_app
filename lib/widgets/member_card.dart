@@ -124,7 +124,7 @@ class _CardFront extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 40 * s,
+                      fontSize: 46 * s,
                       height: 1.1,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF2A0A4E),
