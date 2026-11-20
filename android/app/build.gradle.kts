@@ -15,7 +15,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "dz.epc.epc_app"
-    compileSdk = flutter.compileSdkVersion
+    // مطلوب من flutter_local_notifications (AndroidX Core 1.19)
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
