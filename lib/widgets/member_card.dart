@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -76,20 +77,21 @@ class _MemberCardFlipState extends State<MemberCardFlip>
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, _) {
-            final angle = _controller.value * math.pi;
-            final showBack = angle > math.pi / 2;
+            final t = _controller.value;
+            final showBack = t >= 0.5;
+            // زاوية محدودة (٧٦°) حتى تبقى البطاقة ظاهرة دائماً
+            const maxAngle = 76 * math.pi / 180;
+            final local = showBack ? (t - 0.5) * 2 : t * 2; // 0..1
+            final angle = showBack ? (1 - local) * maxAngle : -local * maxAngle;
+            final depth = 1 - 0.05 * math.sin(local * math.pi);
+
             return Transform(
               alignment: Alignment.center,
               transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.0012)
+                ..setEntry(3, 2, 0.0016)
+                ..scaleByDouble(depth, depth, 1, 1)
                 ..rotateY(angle),
-              child: showBack
-                  ? Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()..rotateY(math.pi),
-                      child: _Back(member: widget.member),
-                    )
-                  : _Front(member: widget.member),
+              child: showBack ? _Back(member: widget.member) : _Front(member: widget.member),
             );
           },
         ),
@@ -100,14 +102,17 @@ class _MemberCardFlipState extends State<MemberCardFlip>
 
 // ── الهيكل العام (خلفية + إطار) ─────────────────────────────────────────
 class _CardShell extends StatelessWidget {
-  final Widget child;
-  const _CardShell({required this.child});
+  final Widget content;
+  final Widget? band;
+
+  const _CardShell({required this.content, this.band});
 
   @override
   Widget build(BuildContext context) {
+    const radius = 27.0;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF1B0A2E).withValues(alpha: 0.42),
@@ -117,40 +122,113 @@ class _CardShell extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [_C.deep, _C.mid, _C.dark],
-                  stops: [0.0, 0.52, 1.0],
-                ),
-              ),
-            ),
-            CustomPaint(painter: _DecorPainter()),
-            // إطار ذهبي رفيع
-            Padding(
-              padding: const EdgeInsets.all(9),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: _C.gold.withValues(alpha: 0.30),
-                    width: 0.9,
+        borderRadius: BorderRadius.circular(radius),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final bandH = band == null ? 0.0 : c.maxHeight * 0.19;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [_C.deep, _C.mid, _C.dark],
+                      stops: [0.0, 0.52, 1.0],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-              child: child,
-            ),
-          ],
+                CustomPaint(painter: _DecorPainter()),
+                if (band != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: bandH,
+                    child: _FrostedBand(child: band!),
+                  ),
+                // إطار ذهبي رفيع
+                Padding(
+                  padding: const EdgeInsets.all(9),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(19),
+                      border: Border.all(
+                        color: _C.gold.withValues(alpha: 0.30),
+                        width: 0.9,
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 17, 20, band == null ? 16 : bandH + 8),
+                  child: content,
+                ),
+              ],
+            );
+          },
         ),
+      ),
+    );
+  }
+}
+
+/// شريط سفلي بخلفية مغبشة من صورة النادي
+class _FrostedBand extends StatelessWidget {
+  final Widget child;
+  const _FrostedBand({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // الصورة مغبشة + تلوين بنفسجي + تلاشي ناعم للأعلى
+          ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (rect) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.transparent, Colors.white, Colors.white],
+              stops: [0.0, 0.38, 1.0],
+            ).createShader(rect),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ImageFiltered(
+                  imageFilter:
+                      ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6, tileMode: TileMode.mirror),
+                  child: Transform.scale(
+                    scale: 1.6,
+                    child: Image.asset(
+                      'assets/images/club_banner.png',
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x992B0B4D), Color(0xCC150722)],
+                      stops: [0.0, 1.0],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // محتوى الشريط
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 11),
+            child: Align(alignment: Alignment.bottomCenter, child: child),
+          ),
+        ],
       ),
     );
   }
@@ -278,56 +356,6 @@ class _LogoMark extends StatelessWidget {
   }
 }
 
-/// شريحة ذكية ذهبية
-class _Chip extends StatelessWidget {
-  final double width;
-  const _Chip({this.width = 26});
-
-  @override
-  Widget build(BuildContext context) {
-    final h = width * 0.76;
-    return Container(
-      width: width,
-      height: h,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(width * 0.16),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFF6E7B4), Color(0xFFC9A227), Color(0xFFE3C471)],
-          stops: [0.0, 0.55, 1.0],
-        ),
-        border: Border.all(color: const Color(0xFF8A6A12).withValues(alpha: 0.35), width: 0.6),
-      ),
-      child: CustomPaint(painter: _ChipPainter()),
-    );
-  }
-}
-
-class _ChipPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = const Color(0xFF8A6A12).withValues(alpha: 0.45)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.7;
-    final w = size.width, h = size.height;
-    canvas.drawLine(Offset(0, h * 0.36), Offset(w, h * 0.36), p);
-    canvas.drawLine(Offset(0, h * 0.68), Offset(w, h * 0.68), p);
-    canvas.drawLine(Offset(w * 0.42, 0), Offset(w * 0.42, h), p);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.16, h * 0.22, w * 0.52, h * 0.56),
-        const Radius.circular(2),
-      ),
-      p,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 /// خط فاصل رفيع
 class _Rule extends StatelessWidget {
   final double s;
@@ -352,7 +380,7 @@ class _Front extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _CardShell(
-      child: LayoutBuilder(
+      content: LayoutBuilder(
         builder: (context, c) {
           final s = (c.maxWidth / 310).clamp(0.70, 3.2);
 
@@ -490,7 +518,7 @@ class _Front extends StatelessWidget {
                           const Spacer(),
                           // شريط البيانات
                           _Rule(s: s, alpha: 0.10),
-                          SizedBox(height: 7 * s),
+                          SizedBox(height: 5 * s),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -515,7 +543,7 @@ class _Front extends StatelessWidget {
                               ),
                             ],
                           ),
-                          SizedBox(height: 8 * s),
+                          SizedBox(height: 6 * s),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -551,31 +579,32 @@ class _Front extends StatelessWidget {
                 ),
               ),
 
-              SizedBox(height: 10 * s),
-              // ── التذييل ──────────────────────────────────────────────
-              Row(
-                children: [
-                  _Chip(width: 20 * s),
-                  SizedBox(width: 7 * s),
-                  Text(
-                    'MEMBER CARD',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.40),
-                      fontSize: 5.8 * s,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.8,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'عضو منذ ${member.joinedLabel}',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.40),
-                      fontSize: 6.6 * s,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+            ],
+          );
+        },
+      ),
+      band: LayoutBuilder(
+        builder: (context, bc) {
+          final bs = (bc.maxWidth / 320).clamp(0.70, 3.2);
+          return Row(
+            children: [
+              Text(
+                'MEMBER CARD',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.55),
+                  fontSize: 5.6 * bs,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'عضو منذ ${member.joinedLabel}',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 6.4 * bs,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           );
@@ -623,7 +652,7 @@ class _Spec extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: _C.goldSoft.withValues(alpha: 0.68),
-            fontSize: 6.9 * s,
+            fontSize: 6.4 * s,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.3,
             height: 1.1,
@@ -636,9 +665,9 @@ class _Spec extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.95),
-            fontSize: 9.5 * s,
+            fontSize: 9 * s,
             fontWeight: FontWeight.w700,
-            height: 1.18,
+            height: 1.15,
           ),
         ),
       ],
@@ -740,7 +769,7 @@ class _Back extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _CardShell(
-      child: LayoutBuilder(
+      content: LayoutBuilder(
         builder: (context, c) {
           final s = (c.maxWidth / 310).clamp(0.70, 3.2);
           final qrSize = math.min(c.maxHeight * 0.56, c.maxWidth * 0.32);
@@ -847,53 +876,37 @@ class _Back extends StatelessWidget {
                   ],
                 ),
               ),
-              SizedBox(height: 6 * s),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: SizedBox(
-                      height: 13 * s,
-                      child: CustomPaint(painter: _BarcodePainter(member.regNumber)),
-                    ),
+            ],
+          );
+        },
+      ),
+      band: LayoutBuilder(
+        builder: (context, bc) {
+          final bs = (bc.maxWidth / 320).clamp(0.70, 3.2);
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                flex: 4,
+                child: SizedBox(
+                  height: 12 * bs,
+                  child: CustomPaint(painter: _BarcodePainter(member.regNumber)),
+                ),
+              ),
+              SizedBox(width: 12 * bs),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'هذه البطاقة ملك لنادي رواد الاقتصاد — غير قابلة للتحويل',
+                  maxLines: 2,
+                  textAlign: TextAlign.end,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.42),
+                    fontSize: 4.9 * bs,
+                    height: 1.25,
                   ),
-                  SizedBox(width: 12 * s),
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Container(
-                          height: 11 * s,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.90),
-                            borderRadius: BorderRadius.circular(2 * s),
-                          ),
-                          child: Text(
-                            'توقيع العضو',
-                            style: TextStyle(
-                              color: _C.deep,
-                              fontSize: 5.2 * s,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 2 * s),
-                        Text(
-                          'هذه البطاقة ملك لنادي رواد الاقتصاد — غير قابلة للتحويل',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.30),
-                            fontSize: 4.8 * s,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           );
@@ -912,7 +925,7 @@ class _InfoLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 2.4 * s),
+      padding: EdgeInsets.symmetric(vertical: 2.0 * s),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(

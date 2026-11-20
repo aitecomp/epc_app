@@ -1,7 +1,7 @@
 name: epc_app
 description: "EPC — نادي رواد الاقتصاد | Economics Pioneers Club"
 publish_to: 'none'
-version: 1.5.0+6
+version: 1.6.0+7
 
 environment:
   sdk: ^3.5.0
@@ -28,6 +28,7 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/banner.png
+    - assets/images/club_banner.png
     - assets/images/member_card.png
 
   fonts:
