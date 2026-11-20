@@ -4,7 +4,6 @@
 
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -503,7 +502,7 @@ class _FlipMemberCardState extends State<FlipMemberCard> with SingleTickerProvid
             transform: Matrix4.identity()
               ..setEntry(3, 2, 0.0012)
               ..rotateY(angle),
-            child: showFront ? _frontFace() : Transform(rotationY: math.pi, child: _backFace()),
+            child: showFront ? _frontFace() : Transform(transform: Matrix4.rotationY(math.pi), alignment: Alignment.center, child: _backFace()),
           );
         },
       ),
