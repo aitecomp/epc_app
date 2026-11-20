@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/store.dart';
 import '../core/theme.dart';
+import '../widgets/search_picker.dart';
 
 class MemberFormScreen extends StatefulWidget {
   final Member? member;
@@ -168,19 +169,49 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
               title: 'المسار الجامعي — جامعة غيليزان',
               child: Column(
                 children: [
-                  _dropdown('الشعبة', kBranches, _branch, (v) {
-                    setState(() {
-                      _branch = v;
-                      _specialization = kPrograms[v]!.first;
-                    });
-                  }, icon: Icons.account_tree_outlined),
+                  _pickerField(
+                    label: 'الكلية',
+                    value: _branch,
+                    icon: Icons.account_balance_outlined,
+                    onTap: () async {
+                      final picked = await showFacultyPicker(context, current: _branch);
+                      if (picked == null) return;
+                      setState(() {
+                        _branch = picked;
+                        final list = kFaculties[picked];
+                        if (list != null && list.isNotEmpty && !list.contains(_specialization)) {
+                          _specialization = list.first;
+                        }
+                      });
+                    },
+                  ),
                   const SizedBox(height: 14),
-                  _dropdown('التخصص', kPrograms[_branch] ?? const [kCommonTrunkProgram],
-                      kPrograms[_branch]!.contains(_specialization)
-                          ? _specialization
-                          : kPrograms[_branch]!.first,
-                      (v) => setState(() => _specialization = v),
-                      icon: Icons.school_outlined),
+                  _pickerField(
+                    label: 'التخصص',
+                    value: _specialization,
+                    icon: Icons.school_outlined,
+                    hint: 'اضغط للبحث واختيار التخصص',
+                    onTap: () async {
+                      final picked = await showProgramPicker(
+                        context,
+                        title: 'اختر التخصص',
+                        search: searchPrograms,
+                        current: _specialization,
+                        allowCustom: true,
+                        customHint: 'اسم التخصص',
+                      );
+                      if (picked == null) return;
+                      setState(() {
+                        _specialization = picked;
+                        final faculty = branchOfProgram(picked);
+                        if (kFaculties.containsKey(faculty) && faculty != kOtherFaculty) {
+                          _branch = faculty;
+                        } else {
+                          _branch = kOtherFaculty;
+                        }
+                      });
+                    },
+                  ),
                   const SizedBox(height: 14),
                   _dropdown('المستوى الدراسي', kLevels, _level, (v) => setState(() => _level = v),
                       icon: Icons.trending_up),
@@ -204,9 +235,9 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _branch == kCommonTrunk
-                                ? 'طلبة السنة الأولى يدرسون في الجذع المشترك ثم يختارون الشعبة.'
-                                : 'الشعبة: $_branch — التخصص: $_specialization',
+                            _branch == kOtherFaculty
+                                ? 'تخصص مخصص: $_specialization'
+                                : '$_branch — $_specialization',
                             style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.5),
                           ),
                         ),
@@ -342,6 +373,54 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: icon == null ? null : Icon(icon, size: 19, color: AppColors.purple),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _pickerField({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.muted)),
+        const SizedBox(height: 7),
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 19, color: AppColors.purple),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    value.isEmpty ? (hint ?? '') : value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: value.isEmpty ? AppColors.muted : AppColors.ink,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.unfold_more, size: 18, color: AppColors.muted),
+              ],
+            ),
           ),
         ),
       ],

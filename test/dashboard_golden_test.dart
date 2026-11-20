@@ -23,31 +23,31 @@ Future<void> loadFonts() async {
 
 List<Map<String, dynamic>> _seed() => [
       {
-        'id': '1', 'firstName': 'محمد', 'lastName': 'بن عيسى', 'specialization': 'اقتصاد نقدي وبنكي', 'branch': 'العلوم الاقتصادية',
+        'id': '1', 'firstName': 'محمد', 'lastName': 'بن عيسى', 'specialization': 'اقتصاد نقدي وبنكي', 'branch': 'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',
         'level': 'السنة الثالثة (L3)', 'year': '2026/2027', 'regNumber': '20260001', 'password': '1234',
         'phone': '0551234567', 'email': 'm@epc.dz', 'role': 'عضو أساسي', 'photo': '',
         'joinedAt': '2026-10-01T10:00:00.000',
       },
       {
-        'id': '2', 'firstName': 'أمينة', 'lastName': 'قاسمي', 'specialization': 'محاسبة', 'branch': 'العلوم المالية والمحاسبية',
+        'id': '2', 'firstName': 'أمينة', 'lastName': 'قاسمي', 'specialization': 'محاسبة', 'branch': 'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',
         'level': 'ماستر 1 (M1)', 'year': '2026/2027', 'regNumber': '20260002', 'password': '1234',
         'phone': '0552234567', 'email': 'a@epc.dz', 'role': 'نائب القائد', 'photo': '',
         'joinedAt': '2026-10-03T10:00:00.000',
       },
       {
-        'id': '3', 'firstName': 'يوسف', 'lastName': 'مرابط', 'specialization': 'مالية وبنوك', 'branch': 'العلوم المالية والمحاسبية',
+        'id': '3', 'firstName': 'يوسف', 'lastName': 'مرابط', 'specialization': 'مالية وبنوك', 'branch': 'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',
         'level': 'السنة الثانية (L2)', 'year': '2026/2027', 'regNumber': '20260003', 'password': '1234',
         'phone': '', 'email': '', 'role': 'عضو', 'photo': '',
         'joinedAt': '2026-10-08T10:00:00.000',
       },
       {
-        'id': '4', 'firstName': 'سارة', 'lastName': 'بلحاج', 'specialization': 'اقتصاد نقدي وبنكي', 'branch': 'العلوم الاقتصادية',
+        'id': '4', 'firstName': 'سارة', 'lastName': 'بلحاج', 'specialization': 'اقتصاد نقدي وبنكي', 'branch': 'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',
         'level': 'ماستر 2 (M2)', 'year': '2026/2027', 'regNumber': '20260004', 'password': '1234',
         'phone': '', 'email': '', 'role': 'أمين عام', 'photo': '',
         'joinedAt': '2026-10-11T10:00:00.000',
       },
       {
-        'id': '5', 'firstName': 'رياض', 'lastName': 'زروقي', 'specialization': 'مالية وتجارة دولية', 'branch': 'العلوم التجارية',
+        'id': '5', 'firstName': 'رياض', 'lastName': 'زروقي', 'specialization': 'مالية وتجارة دولية', 'branch': 'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',
         'level': 'السنة الأولى (L1)', 'year': '2026/2027', 'regNumber': '20260005', 'password': '1234',
         'phone': '', 'email': '', 'role': 'عضو', 'photo': '',
         'joinedAt': '2026-10-14T10:00:00.000',

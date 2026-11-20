@@ -3,39 +3,34 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// ── خيارات النادي (جامعة غيليزان — كلية العلوم الاقتصادية والتجارية وعلوم التسيير) ──
+/// ── خيارات النادي ──────────────────────────────────────────────────────
+/// التخصصات مبنية على كليات وأقسام جامعة غيليزان (أحمد زبانة)
 
-/// السنة الجامعية الحالية
 const String kAcademicYear = '2026/2027';
 const List<String> kAcademicYears = ['2026/2027', '2025/2026'];
 
-/// الشعب (الأقسام) — مع الجذع المشترك للسنة الأولى
 const String kCommonTrunk = 'جذع مشترك';
 const String kCommonTrunkProgram = 'جذع مشترك — علوم اقتصادية وتجارية وعلوم التسيير';
+const String kOtherFaculty = 'أخرى';
 
-const Map<String, List<String>> kPrograms = {
-  kCommonTrunk: [kCommonTrunkProgram],
-  'العلوم الاقتصادية': [
+/// الكلية → قائمة التخصصات
+const Map<String, List<String>> kFaculties = {
+  'كلية العلوم الاقتصادية والتجارية وعلوم التسيير': [
+    kCommonTrunkProgram,
     'اقتصاد وتسيير المؤسسات',
     'اقتصاد نقدي وبنكي',
     'اقتصاد دولي',
     'اقتصاد كمي',
     'اقتصاد رقمي',
-  ],
-  'العلوم التجارية': [
     'تسويق',
     'مالية وتجارة دولية',
     'علوم تجارية',
     'تجارة إلكترونية',
-  ],
-  'علوم التسيير': [
     'إدارة أعمال',
     'إدارة مالية',
     'إدارة الموارد البشرية',
     'إدارة إلكترونية',
     'تسيير عمومي',
-  ],
-  'العلوم المالية والمحاسبية': [
     'محاسبة',
     'مالية',
     'مالية المؤسسة',
@@ -44,18 +39,87 @@ const Map<String, List<String>> kPrograms = {
     'محاسبة وجباية',
     'تكنولوجيا مالية',
   ],
+  'كلية العلوم والتكنولوجيا': [
+    'جذع مشترك — علوم وتكنولوجيا',
+    'رياضيات',
+    'إعلام آلي',
+    'فيزياء',
+    'كيمياء',
+    'علوم فلاحية',
+    'هندسة مدنية',
+    'هندسة إلكترونية',
+    'هندسة ميكانيكية',
+    'هندسة الطرائق',
+    'أمن معلوماتي',
+  ],
+  'كلية علوم الطبيعة والحياة': [
+    'جذع مشترك — علوم الطبيعة والحياة',
+    'علوم بيولوجية',
+    'بيوتكنولوجيا',
+    'علوم بيئية',
+    'إنتاج نباتي',
+    'إنتاج حيواني',
+    'تكنولوجيا الغذاء ومراقبة النوعية',
+  ],
+  'كلية الحقوق': [
+    'حقوق',
+    'قانون عام',
+    'قانون خاص',
+    'قانون أعمال',
+    'قانون إداري',
+  ],
+  'كلية الآداب واللغات': [
+    'لغة عربية وآدابها',
+    'لغة فرنسية',
+    'لغة إنجليزية',
+    'ترجمة',
+    'لسانيات',
+  ],
+  'كلية العلوم الاجتماعية والإنسانية': [
+    'علم الاجتماع',
+    'علم النفس',
+    'علوم الإعلام والاتصال',
+    'التاريخ',
+    'جغرافيا',
+    'علوم إسلامية',
+    'علوم التربية',
+    'علم اجتماع الترفيه والأسفار',
+    'تاريخ المغرب العربي الحديث',
+    'علم نفس العمل والتنظيم وتسيير الموارد البشرية',
+  ],
+  kOtherFaculty: ['تخصص آخر'],
 };
 
-List<String> get kBranches => kPrograms.keys.toList();
+/// توافق مع الشيفرة السابقة
+const Map<String, List<String>> kPrograms = kFaculties;
+
+List<String> get kBranches => kFaculties.keys.toList();
 
 List<String> get kSpecializations =>
-    kPrograms.values.expand((e) => e).toList(growable: false);
+    kFaculties.values.expand((e) => e).toList(growable: false);
 
 String branchOfProgram(String program) {
-  for (final entry in kPrograms.entries) {
+  for (final entry in kFaculties.entries) {
     if (entry.value.contains(program)) return entry.key;
   }
-  return kPrograms.keys.first;
+  return kOtherFaculty;
+}
+
+/// بحث سريع في كل التخصصات
+List<MapEntry<String, String>> searchPrograms(String query) {
+  final q = query.trim();
+  final results = <MapEntry<String, String>>[];
+  for (final entry in kFaculties.entries) {
+    for (final program in entry.value) {
+      if (q.isEmpty ||
+          program.contains(q) ||
+          entry.key.contains(q) ||
+          program.toLowerCase().contains(q.toLowerCase())) {
+        results.add(MapEntry(entry.key, program));
+      }
+    }
+  }
+  return results;
 }
 
 /// المستويات الدراسية (نظام ل.م.د)
@@ -70,7 +134,6 @@ const List<String> kLevels = [
 
 const List<String> kLevelShort = ['L1', 'L2', 'L3', 'M1', 'M2', 'دكتوراه'];
 
-/// للتوافق مع النسخ السابقة
 const List<String> kYears = kAcademicYears;
 
 const List<String> kRoles = ['عضو', 'عضو أساسي', 'نائب القائد', 'أمين عام', 'القائد'];
@@ -456,8 +519,8 @@ class MemberStore extends ChangeNotifier {
       id: 'leader',
       firstName: 'قائد',
       lastName: 'النادي',
-      specialization: kPrograms['علوم التسيير']!.first,
-      branch: 'علوم التسيير',
+      specialization: 'إدارة أعمال',
+      branch: 'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',
       level: kLevels[2],
       year: kAcademicYear,
       regNumber: leaderReg,
