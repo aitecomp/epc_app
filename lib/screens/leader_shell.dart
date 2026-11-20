@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import 'member_detail_screen.dart';
@@ -29,6 +30,7 @@ class _LeaderShellState extends State<LeaderShell> {
     );
     if (saved == true && mounted) {
       setState(() {});
+      CloudSync.pushInBackground(store);
       toast(context, member == null ? 'تمت إضافة العضو بنجاح' : 'تم حفظ التعديلات');
     }
   }
@@ -70,6 +72,7 @@ class _LeaderShellState extends State<LeaderShell> {
     );
     if (confirmed != true) return;
     await store.deleteMember(member.id);
+    CloudSync.pushInBackground(store);
     if (mounted) {
       setState(() {});
       toast(context, 'تم حذف العضو');

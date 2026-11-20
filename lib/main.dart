@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'core/cloud_sync.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
 import 'screens/leader_shell.dart';
@@ -16,6 +17,10 @@ void main() async {
   ));
   await MemberStore.instance.init();
   runApp(const EpcApp());
+  // مزامنة سحابية في الخلفية (Cloudflare R2)
+  if (CloudSync.enabled) {
+    CloudSync.syncNow(MemberStore.instance);
+  }
 }
 
 class EpcApp extends StatelessWidget {

@@ -49,6 +49,7 @@ class Member {
   String role;
   String photoBase64;
   DateTime joinedAt;
+  DateTime updatedAt;
 
   Member({
     required this.id,
@@ -64,7 +65,9 @@ class Member {
     this.role = 'عضو',
     this.photoBase64 = '',
     DateTime? joinedAt,
-  }) : joinedAt = joinedAt ?? DateTime.now();
+    DateTime? updatedAt,
+  }) : joinedAt = joinedAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -91,6 +94,7 @@ class Member {
         'role': role,
         'photo': photoBase64,
         'joinedAt': joinedAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
       };
 
   static Member fromJson(Map<String, dynamic> json) => Member(
@@ -107,6 +111,9 @@ class Member {
         role: (json['role'] ?? 'عضو').toString(),
         photoBase64: (json['photo'] ?? '').toString(),
         joinedAt: DateTime.tryParse((json['joinedAt'] ?? '').toString()) ?? DateTime.now(),
+        updatedAt: DateTime.tryParse((json['updatedAt'] ?? '').toString()) ??
+            DateTime.tryParse((json['joinedAt'] ?? '').toString()) ??
+            DateTime.now(),
       );
 }
 
@@ -119,10 +126,14 @@ class MemberStore extends ChangeNotifier {
   static const _kSession = 'epc_session_v2';
   static const _kLeaderReg = 'epc_leader_reg';
   static const _kLeaderPass = 'epc_leader_pass';
+  static const _kDeleted = 'epc_deleted_v2';
 
   final List<Member> _members = [];
+  final Map<String, DateTime> _deleted = {};
   SharedPreferences? _prefs;
   bool ready = false;
+
+  void notify() => notifyListeners();
 
   List<Member> get members => List.unmodifiable(_members);
 
@@ -168,13 +179,93 @@ class MemberStore extends ChangeNotifier {
       } catch (_) {}
     }
     _members.sort((a, b) => a.fullName.compareTo(b.fullName));
+
+    final deletedRaw = _prefs!.getString(_kDeleted);
+    if (deletedRaw != null && deletedRaw.isNotEmpty) {
+      try {
+        final map = jsonDecode(deletedRaw) as Map<String, dynamic>;
+        map.forEach((k, v) {
+          final at = DateTime.tryParse(v.toString());
+          if (at != null) _deleted[k] = at;
+        });
+      } catch (_) {}
+    }
+
     ready = true;
     notifyListeners();
   }
 
   Future<void> _persist() async {
     await _prefs?.setString(_kMembers, jsonEncode(_members.map((m) => m.toJson()).toList()));
+    await _prefs?.setString(
+      _kDeleted,
+      jsonEncode(_deleted.map((k, v) => MapEntry(k, v.toIso8601String()))),
+    );
     notifyListeners();
+  }
+
+  /// حزمة المزامنة الكاملة (الأعضاء + المحذوفون)
+  Map<String, dynamic> exportPayload() => {
+        'members': _members.map((m) => m.toJson()).toList(),
+        'deleted': _deleted.entries
+            .map((e) => {'id': e.key, 'at': e.value.toIso8601String()})
+            .toList(),
+      };
+
+  /// دمج نسخة السحابة مع النسخة المحلية (الأحدث يفوز)
+  Future<bool> applyRemotePayload(Map<String, dynamic> payload) async {
+    bool changed = false;
+
+    final remoteDeleted = <String, DateTime>{};
+    final deletedList = payload['deleted'];
+    if (deletedList is List) {
+      for (final item in deletedList) {
+        if (item is Map) {
+          final at = DateTime.tryParse('${item['at']}');
+          if (at != null && item['id'] != null) remoteDeleted['${item['id']}'] = at;
+        }
+      }
+    }
+
+    // حذف ما حُذف في السحابة
+    for (final entry in remoteDeleted.entries) {
+      final local = _deleted[entry.key];
+      if (local == null || entry.value.isAfter(local)) {
+        _deleted[entry.key] = entry.value;
+        final before = _members.length;
+        _members.removeWhere((m) =>
+            m.id == entry.key &&
+            !m.updatedAt.isAfter(entry.value));
+        if (_members.length != before) changed = true;
+      }
+    }
+
+    // إضافة / تحديث الأعضاء
+    final list = payload['members'];
+    if (list is List) {
+      for (final item in list) {
+        if (item is! Map) continue;
+        final incoming = Member.fromJson(Map<String, dynamic>.from(item));
+        if (incoming.id.isEmpty) continue;
+        final tomb = _deleted[incoming.id];
+        if (tomb != null && !incoming.updatedAt.isAfter(tomb)) continue;
+
+        final index = _members.indexWhere((m) => m.id == incoming.id);
+        if (index < 0) {
+          _members.add(incoming);
+          changed = true;
+        } else if (incoming.updatedAt.isAfter(_members[index].updatedAt)) {
+          _members[index] = incoming;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      _members.sort((a, b) => a.fullName.compareTo(b.fullName));
+      await _persist();
+    }
+    return changed;
   }
 
   /// الدخول: قائد أو عضو
@@ -210,6 +301,7 @@ class MemberStore extends ChangeNotifier {
       _members.any((m) => m.regNumber == reg.trim() && m.id != ignoreId) || reg.trim() == leaderReg;
 
   Future<void> saveMember(Member member) async {
+    member.updatedAt = DateTime.now();
     final index = _members.indexWhere((m) => m.id == member.id);
     if (index >= 0) {
       _members[index] = member;
@@ -222,6 +314,7 @@ class MemberStore extends ChangeNotifier {
 
   Future<void> deleteMember(String id) async {
     _members.removeWhere((m) => m.id == id);
+    _deleted[id] = DateTime.now();
     await _persist();
   }
 

@@ -18,9 +18,57 @@ env:
   FLUTTER_VERSION: '3.47.9'
   LEADER_REG_B64: ${{ secrets.LEADER_REG_B64 }}
   LEADER_PASS_B64: ${{ secrets.LEADER_PASS_B64 }}
+  SYNC_URL: ${{ secrets.SYNC_URL }}
+  SYNC_KEY: ${{ secrets.SYNC_KEY }}
 
 jobs:
-  # ── 1) تطبيق الويب: GitHub Pages + Cloudflare Pages ──────────────────
+  # ── 1) نشر خدمة المزامنة على Cloudflare Workers + R2 ────────────────
+  sync-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure R2 bucket exists
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_TOKEN" ]; then echo "::notice::CLOUDFLARE_API_TOKEN غير مضبوط — تم تخطي الخدمة"; exit 0; fi
+          curl -sS -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/r2/buckets" \
+            -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" \
+            -d '{"name":"epc-club-data"}' || true
+
+      - name: Deploy sync Worker
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SYNC_KEY_VALUE: ${{ secrets.SYNC_KEY }}
+        run: |
+          if [ -z "$CF_TOKEN" ]; then echo "::notice::تم تخطي نشر Worker"; exit 0; fi
+          cd cloudflare
+          python3 - "$SYNC_KEY_VALUE" <<'PY'
+          import json, sys
+          meta = {
+            "main_module": "worker.js",
+            "compatibility_date": "2026-01-01",
+            "bindings": [
+              {"type": "r2_bucket", "name": "EPC_BUCKET", "bucket_name": "epc-club-data"},
+              {"type": "secret_text", "name": "SYNC_KEY", "text": sys.argv[1]},
+            ],
+          }
+          open("metadata.json", "w").write(json.dumps(meta))
+          PY
+          curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/scripts/epc-sync" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -F "metadata=@metadata.json;type=application/json" \
+            -F "worker.js=@worker.js;type=application/javascript+module" \
+            -o /tmp/worker-out.json -w "worker deploy: %{http_code}\n"
+          curl -sS -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/scripts/epc-sync/subdomain" \
+            -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" \
+            -d '{"enabled":true}' -o /dev/null -w "subdomain: %{http_code}\n"
+          head -c 300 /tmp/worker-out.json
+
+  # ── 2) تطبيق الويب: GitHub Pages + Cloudflare Pages ──────────────────
   web:
     runs-on: ubuntu-latest
     steps:
@@ -39,7 +87,9 @@ jobs:
         run: |
           flutter build web --release --base-href /epc_app/ \
             --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
-            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY"
 
       - name: Keep Pages build
         run: cp -r build/web /tmp/web-github-pages
@@ -48,15 +98,17 @@ jobs:
         run: |
           flutter build web --release --base-href / \
             --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
-            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY"
 
       # ── GitHub Pages ──
       - uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
+      - name: Restore GitHub Pages build
         run: |
-          rm -rf build/web && cp -r /tmp/web-github-pages build/web
-          echo "ready"
+          rm -rf build/web
+          cp -r /tmp/web-github-pages build/web
 
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -65,7 +117,7 @@ jobs:
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
 
-      # ── Cloudflare Pages (يُفعّل تلقائياً عند إضافة الأسرار) ──
+      # ── Cloudflare Pages ──
       - name: Check Cloudflare credentials
         id: cf
         run: |
@@ -73,18 +125,18 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Cloudflare::لم يتم النشر على Cloudflare — أضف CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID في أسرار المستودع."
+            echo "::notice title=Cloudflare::أضف CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID للنشر على Cloudflare."
           fi
 
       - name: Deploy to Cloudflare Pages
         if: steps.cf.outputs.ready == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build/web --project-name=epc-club --branch=main
+        run: |
+          npx --yes wrangler@4 pages deploy build/web --project-name=epc-club --branch=main --commit-dirty=true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  # ── 2) تطبيق الأندرويد: APK موقّع بمفتاح إصدار حقيقي ─────────────────
+  # ── 3) تطبيق الأندرويد: APK موقّع بمفتاح إصدار حقيقي ─────────────────
   android:
     runs-on: ubuntu-latest
     steps:
@@ -107,7 +159,7 @@ jobs:
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/keys/epc-release.jks
           printf 'storeFile=keys/epc-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "${{ secrets.KEYSTORE_PASSWORD }}" "${{ secrets.KEY_ALIAS }}" "${{ secrets.KEY_PASSWORD }}" > android/key.properties
-          cat android/key.properties | sed 's/storePassword=.*/storePassword=***/'
+          sed 's/storePassword=.*/storePassword=***/' android/key.properties
 
       - name: Dependencies
         run: flutter pub get
@@ -116,30 +168,34 @@ jobs:
         run: |
           flutter build apk --release \
             --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
-            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY"
 
       - name: Build signed APK (arm64 — حجم أصغر)
         run: |
           flutter build apk --release --target-platform android-arm64 --split-per-abi \
             --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
-            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY"
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/epc-arm64.apk || true
 
       - name: Build Play Store bundle (AAB)
         run: |
           flutter build appbundle --release \
             --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
-            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64"
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY"
 
       - name: Verify signing
         run: |
           APK=build/app/outputs/flutter-apk/app-release.apk
           ls -lh "$APK"
-          unzip -l "$APK" | grep -E "META-INF/(CERT|.*\.RSA)" || true
-          echo "--- verifying signature with apksigner if available ---"
           BT=$(ls -d $ANDROID_SDK_ROOT/build-tools/* 2>/dev/null | sort -V | tail -1)
           if [ -n "$BT" ] && [ -x "$BT/apksigner" ]; then
-            "$BT/apksigner" verify --verbose --print-certs "$APK" | head -20
+            "$BT/apksigner" verify --verbose --print-certs "$APK" | head -12
           fi
 
       - uses: actions/upload-artifact@v4
@@ -153,19 +209,19 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: EPC App v1.1.0 — نادي رواد الاقتصاد
+          tag_name: v1.2.0
+          name: EPC App v1.2.0 — نادي رواد الاقتصاد
           body: |
-            ## تطبيق نادي رواد الاقتصاد — Economics Pioneers Club
+            ## نادي رواد الاقتصاد — Economics Pioneers Club
 
             **تحميل الأندرويد:**
-            - `app-release.apk` — يعمل على جميع الهواتف (الحجم الأكبر)
-            - `epc-arm64.apk` — للهواتف الحديثة (حجم أصغر) ← يُنصح به
+            - `epc-arm64.apk` — للهواتف الحديثة، حجم أصغر ✅ **مُستحسن**
+            - `app-release.apk` — نسخة شاملة لكل الأجهزة
             - `app-release.aab` — لنشر التطبيق على Google Play
 
-            **الويب:** https://aitecomp.github.io/epc_app/
+            **الويب:** https://epc-club.pages.dev — https://aitecomp.github.io/epc_app/
 
-            > الدخول متاح للقائد والأعضاء المسجَّلين. بيانات الدخول لا تُعرض داخل التطبيق.
+            الحزمة موقّعة بمفتاح إصدار رسمي (v1 + v2 + v3) وجاهزة للتثبيت.
           files: |
             build/app/outputs/flutter-apk/app-release.apk
             build/epc-arm64.apk

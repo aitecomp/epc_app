@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 
@@ -20,6 +21,8 @@ class _SettingsTabState extends State<SettingsTab> {
   final _pass2 = TextEditingController();
   bool _obscure = true;
   bool _saving = false;
+  bool _syncing = false;
+  String? _syncMessage;
 
   @override
   void initState() {
@@ -39,6 +42,24 @@ class _SettingsTabState extends State<SettingsTab> {
     final text = widget.store.exportText();
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) toast(context, 'تم نسخ قائمة الأعضاء — الصقها في Excel أو Word');
+  }
+
+  Future<void> _sync() async {
+    if (!CloudSync.enabled) {
+      toast(context, 'المزامنة السحابية غير مهيّأة في هذه النسخة', error: true);
+      return;
+    }
+    setState(() {
+      _syncing = true;
+      _syncMessage = null;
+    });
+    final ok = await CloudSync.syncNow(widget.store);
+    if (!mounted) return;
+    setState(() {
+      _syncing = false;
+      _syncMessage = ok ? 'تمت المزامنة بنجاح' : 'تعذّرت المزامنة، تحقّق من الاتصال';
+    });
+    toast(context, _syncMessage!, error: !ok);
   }
 
   Future<void> _resetClub() async {
@@ -191,6 +212,74 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
               const SizedBox(height: 16),
               SectionCard(
+                title: 'المزامنة السحابية',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: (CloudSync.enabled ? const Color(0xFF15803D) : AppColors.muted)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            CloudSync.enabled ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                            size: 19,
+                            color: CloudSync.enabled ? const Color(0xFF15803D) : AppColors.muted,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                CloudSync.enabled ? 'مُفعّلة — Cloudflare R2' : 'غير مهيّأة',
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _syncMessage ??
+                                    (CloudSync.lastSync == null
+                                        ? 'تتم مزامنة الأعضاء بين كل الأجهزة تلقائياً'
+                                        : 'آخر مزامنة: ${_timeLabel(CloudSync.lastSync!)}'),
+                                style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 46,
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _syncing ? null : _sync,
+                        icon: _syncing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.sync, size: 18),
+                        label: Text(_syncing ? 'جارٍ المزامنة…' : 'مزامنة الآن',
+                            style: const TextStyle(fontWeight: FontWeight.w800)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.purple,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SectionCard(
                 title: 'بيانات النادي',
                 child: Column(
                   children: [
@@ -294,6 +383,9 @@ class _SettingsTabState extends State<SettingsTab> {
       ],
     );
   }
+
+  String _timeLabel(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _label(String text) => Text(
         text,

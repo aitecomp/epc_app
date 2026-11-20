@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
@@ -65,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final updated = widget.member;
         updated.photoBase64 = base64Encode(bytes);
         await MemberStore.instance.saveMember(updated);
+        CloudSync.pushInBackground(MemberStore.instance);
         if (mounted) {
           setState(() {});
           toast(context, 'تم تحديث الصورة بنجاح');
