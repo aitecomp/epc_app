@@ -182,6 +182,24 @@ class _GuillochePainter extends CustomPainter {
       canvas.drawCircle(Offset(size.width + 14, -12), 30.0 + i * 13, gold2);
     }
 
+    // مونوغرام مائي في الوسط
+    final tp = TextPainter(
+      text: TextSpan(
+        text: 'EPC',
+        style: TextStyle(
+          color: const Color(0xFFEBD08A).withValues(alpha: 0.055),
+          fontSize: size.height * 0.55,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 4,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    canvas.save();
+    canvas.translate((size.width - tp.width) / 2, (size.height - tp.height) / 2);
+    tp.paint(canvas, Offset.zero);
+    canvas.restore();
+
     // خطوط قطرية خفيفة
     final line = Paint()
       ..strokeWidth = 0.5
@@ -221,13 +239,15 @@ class _LogoMark extends StatelessWidget {
 
 /// رقاقة البطاقة الذكية
 class _Chip extends StatelessWidget {
-  const _Chip();
+  final double width;
+  final double height;
+  const _Chip({this.width = 26, this.height = 20});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 26,
-      height: 20,
+      width: width,
+      height: height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
         gradient: const LinearGradient(
@@ -273,8 +293,6 @@ class _Front extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final s = (c.maxWidth / 340).clamp(0.72, 1.6);
-          final photoW = 78.0 * s;
-          final photoH = 96.0 * s;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,102 +349,142 @@ class _Front extends StatelessWidget {
                   ),
                 ],
               ),
-              SizedBox(height: 10 * s),
+              SizedBox(height: 8 * s),
               // ── الجسم ──
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // الصورة + الرقاقة
-                    SizedBox(
-                      width: photoW,
-                      height: photoH,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: photoW,
-                            height: photoH,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10 * s),
-                              border: Border.all(color: const Color(0xFFC9A227), width: 1.4),
-                              color: Colors.white.withValues(alpha: 0.08),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(9 * s),
-                              child: _Photo(member: member),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: -8 * s,
-                            left: -6 * s,
-                            child: const _Chip(),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(width: 10 * s),
-                    // البيانات
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            member.fullName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14.5 * s,
-                              fontWeight: FontWeight.w800,
-                              height: 1.25,
-                            ),
-                          ),
-                          SizedBox(height: 1),
-                          Row(
+                child: LayoutBuilder(
+                  builder: (context, bc) {
+                    final photoH = bc.maxHeight - 24 * s;
+                    final photoW = photoH * 0.72;
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── الصورة + الرقاقة ──
+                        SizedBox(
+                          width: photoW,
+                          child: Column(
                             children: [
-                              Icon(Icons.verified_outlined,
-                                  size: 10 * s, color: const Color(0xFFEBD08A)),
-                              SizedBox(width: 3 * s),
-                              Text(
-                                'رقم التسجيل ${member.regNumber}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: const Color(0xFFEBD08A),
-                                  fontSize: 8.6 * s,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.3,
+                              Container(
+                                height: photoH,
+                                width: photoW,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(9 * s),
+                                  border: Border.all(color: const Color(0xFFC9A227), width: 1.6),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Color(0x33FFFFFF), Color(0x14FFFFFF)],
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.all(1.6 * s),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8.5 * s),
+                                    child: _Photo(member: member, iconSize: photoH * 0.30),
+                                  ),
                                 ),
                               ),
+                              SizedBox(height: 6 * s),
+                              _Chip(width: 24 * s, height: 18 * s),
                             ],
                           ),
-                          SizedBox(height: 8 * s),
-                          _Field(label: 'التخصص', value: member.displaySpecialization, s: s),
-                          SizedBox(height: 6 * s),
-                          _Field(label: 'المستوى الدراسي', value: member.level, s: s),
-                          SizedBox(height: 6 * s),
-                          _Field(label: 'الكلية', value: member.branch, s: s, maxLines: 1),
-                          const Spacer(),
-                          Row(
+                        ),
+                        SizedBox(width: 12 * s),
+                        // ── البيانات ──
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.event_available_outlined,
-                                  size: 8.5 * s, color: Colors.white.withValues(alpha: 0.4)),
-                              SizedBox(width: 3 * s),
-                              Text(
-                                'عضو منذ ${member.joinedLabel}',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                  fontSize: 7 * s,
-                                  fontWeight: FontWeight.w600,
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    member.fullName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14.5 * s,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                  SizedBox(height: 3 * s),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 6 * s, vertical: 2.4 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFC9A227).withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(4 * s),
+                                      border: Border.all(
+                                          color: const Color(0xFFC9A227).withValues(alpha: 0.45),
+                                          width: 0.8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.verified_user_outlined,
+                                            size: 8.6 * s, color: const Color(0xFFEBD08A)),
+                                        SizedBox(width: 3 * s),
+                                        Text(
+                                          'رقم التسجيل  ${member.regNumber}',
+                                          style: TextStyle(
+                                            color: const Color(0xFFEBD08A),
+                                            fontSize: 8.8 * s,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.6,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 6 * s),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    Expanded(
+                                      flex: 2,
+                                      child: _Field(
+                                          label: 'التخصص',
+                                          value: member.displaySpecialization,
+                                          s: s,
+                                          maxLines: 2),
+                                    ),
+                                    SizedBox(height: 3.5 * s),
+                                    Expanded(
+                                      child: _Field(
+                                          label: 'المستوى الدراسي',
+                                          value: member.level,
+                                          s: s),
+                                    ),
+                                    SizedBox(height: 3.5 * s),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _Field(
+                                          label: 'الكلية',
+                                          value: member.branch,
+                                          s: s,
+                                          maxLines: 2),
+                                    ),
+                                    if (member.phone.isNotEmpty) ...[
+                                      SizedBox(height: 3.5 * s),
+                                      Expanded(
+                                        child: _Field(
+                                            label: 'الهاتف', value: member.phone, s: s),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
+                              SizedBox(height: 4 * s),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
               // ── التذييل ──
@@ -451,15 +509,25 @@ class _Front extends StatelessWidget {
                   ),
                   const Spacer(),
                   Flexible(
-                    child: Text(
-                      'Learn • Innovate • Lead • Succeed',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.42),
-                        fontSize: 6.2 * s,
-                        letterSpacing: 0.4,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.event_available_outlined,
+                            size: 7.6 * s, color: Colors.white.withValues(alpha: 0.42)),
+                        SizedBox(width: 3 * s),
+                        Flexible(
+                          child: Text(
+                            'عضو منذ ${member.joinedLabel} • ${member.role}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.45),
+                              fontSize: 6.4 * s,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -482,43 +550,44 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: const Color(0xFFEBD08A).withValues(alpha: 0.75),
-            fontSize: 6.6 * s,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            height: 1.1,
-          ),
-        ),
-        SizedBox(height: 1.5 * s),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 3 * s),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.09),
-            borderRadius: BorderRadius.circular(5 * s),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.8),
-          ),
-          child: Text(
-            value.isEmpty ? '—' : value,
-            maxLines: maxLines,
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3.6 * s),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.085),
+        borderRadius: BorderRadius.circular(5 * s),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.8),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 9.2 * s,
+              color: const Color(0xFFEBD08A).withValues(alpha: 0.8),
+              fontSize: 7.4 * s,
               fontWeight: FontWeight.w700,
-              height: 1.2,
+              height: 1.1,
             ),
           ),
-        ),
-      ],
+          SizedBox(width: 7 * s),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '—' : value,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.start,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10 * s,
+                fontWeight: FontWeight.w800,
+                height: 1.15,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -745,7 +814,8 @@ class _Back extends StatelessWidget {
 
 class _Photo extends StatelessWidget {
   final Member member;
-  const _Photo({required this.member});
+  final double iconSize;
+  const _Photo({required this.member, this.iconSize = 34});
 
   @override
   Widget build(BuildContext context) {
@@ -765,7 +835,7 @@ class _Photo extends StatelessWidget {
       alignment: Alignment.center,
       child: Icon(
         Icons.person,
-        size: 34,
+        size: iconSize,
         color: Colors.white.withValues(alpha: 0.45),
       ),
     );
