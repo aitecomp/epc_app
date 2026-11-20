@@ -6,19 +6,21 @@ import 'package:image_picker/image_picker.dart';
 import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
-import '../widgets/glass_nav.dart';
 import '../widgets/member_card.dart';
 
+/// تبويب البروفيل: البطاقة + معلومات العضوية + الحساب
 class ProfileScreen extends StatefulWidget {
   final Member member;
   final VoidCallback onLogout;
   final bool isLeader;
+  final Widget? extraActions;
 
   const ProfileScreen({
     super.key,
     required this.member,
     required this.onLogout,
     this.isLeader = false,
+    this.extraActions,
   });
 
   @override
@@ -28,7 +30,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _picker = ImagePicker();
   bool _busy = false;
-  int _index = 0;
 
   Future<void> _changePhoto() async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -83,96 +84,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: AppColors.cream,
-      body: IndexedStack(
-        index: _index,
-        children: [_homeTab(), _accountTab()],
-      ),
-      bottomNavigationBar: GlassNavBar(
-        index: _index,
-        onTap: (i) => setState(() => _index = i),
-        items: const [
-          GlassNavItem(
-            icon: Icons.home_outlined,
-            activeIcon: Icons.home_rounded,
-            label: 'الرئيسية',
-          ),
-          GlassNavItem(
-            icon: Icons.person_outline,
-            activeIcon: Icons.person_rounded,
-            label: 'البروفيل',
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── الرئيسية: البطاقة ──
-  Widget _homeTab() {
     final m = widget.member;
-    return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          _header(m),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
-            child: Column(
-              children: [
-                MemberCardFlip(member: m),
-                const SizedBox(height: 20),
-                SectionCard(
-                  title: 'معلومات العضوية',
-                  child: Column(
-                    children: [
-                      _row(Icons.account_tree_outlined, 'الشعبة', m.branch),
-                      _row(Icons.school_outlined, 'التخصص', m.displaySpecialization),
-                      _row(Icons.trending_up, 'المستوى الدراسي', m.level),
-                      _row(Icons.calendar_month_outlined, 'السنة الجامعية', m.year),
-                      _row(Icons.badge_outlined, 'رقم التسجيل', m.regNumber),
-                      _row(Icons.workspace_premium_outlined, 'الصفة', m.role, last: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final top = MediaQuery.paddingOf(context).top;
 
-  // ── البروفيل: الحساب ──
-  Widget _accountTab() {
-    final m = widget.member;
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _header(m),
+        _header(m, top),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
+          padding: EdgeInsets.fromLTRB(16, 18, 16, bottomInset(context)),
           child: Column(
             children: [
+              MemberCardFlip(member: m),
+              const SizedBox(height: 8),
+              Text(
+                'اضغط على البطاقة لعرض الوجه الخلفي',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.muted.withValues(alpha: 0.8),
+                ),
+              ),
+              const SizedBox(height: 18),
               SectionCard(
-                title: 'بياناتي',
+                title: 'معلومات العضوية',
+                child: Column(
+                  children: [
+                    _row(Icons.account_tree_outlined, 'الكلية', m.branch),
+                    _row(Icons.school_outlined, 'التخصص', m.displaySpecialization),
+                    _row(Icons.trending_up, 'المستوى الدراسي', m.level),
+                    _row(Icons.calendar_month_outlined, 'السنة الجامعية', m.year),
+                    _row(Icons.badge_outlined, 'رقم التسجيل', m.regNumber),
+                    _row(Icons.workspace_premium_outlined, 'الصفة', m.role, last: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'الحساب',
                 child: Column(
                   children: [
                     Row(
                       children: [
-                        MemberAvatar(member: m, size: 62),
-                        const SizedBox(width: 14),
+                        MemberAvatar(member: m, size: 58),
+                        const SizedBox(width: 13),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(m.fullName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       fontSize: 16, fontWeight: FontWeight.w800)),
                               const SizedBox(height: 3),
                               Text('${m.displaySpecialization} • ${m.level}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       fontSize: 12, color: AppColors.muted)),
                             ],
@@ -180,16 +147,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    const Divider(height: 22),
-                    _row(Icons.badge_outlined, 'رقم التسجيل', m.regNumber),
+                    const SizedBox(height: 10),
+                    const Divider(height: 20),
                     _row(Icons.phone_outlined, 'الهاتف', m.phone.isEmpty ? '—' : m.phone),
-                    _row(Icons.mail_outline, 'البريد',
-                        m.email.isEmpty ? '—' : m.email),
-                    _row(Icons.event_available_outlined, 'تاريخ الانضمام', m.joinedLabel, last: true),
+                    _row(Icons.mail_outline, 'البريد', m.email.isEmpty ? '—' : m.email),
+                    _row(Icons.event_available_outlined, 'تاريخ الانضمام', m.joinedLabel,
+                        last: true),
                   ],
                 ),
               ),
+              if (widget.extraActions != null) ...[
+                const SizedBox(height: 16),
+                widget.extraActions!,
+              ],
               const SizedBox(height: 16),
               GhostButton(
                 label: _busy ? 'جارٍ...' : 'تغيير الصورة',
@@ -203,7 +173,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: OutlinedButton.icon(
                   onPressed: widget.onLogout,
                   icon: const Icon(Icons.logout, size: 19),
-                  label: const Text('تسجيل الخروج', style: TextStyle(fontWeight: FontWeight.w700)),
+                  label: const Text('تسجيل الخروج',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFB91C1C),
                     side: BorderSide(color: const Color(0xFFB91C1C).withValues(alpha: 0.35)),
@@ -218,9 +189,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _header(Member m) {
+  Widget _header(Member m, double top) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 58, 20, 26),
+      padding: EdgeInsets.fromLTRB(20, top + 14, 20, 26),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.only(
@@ -242,21 +213,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.gold.withValues(alpha: 0.7)),
                 ),
-                child: ClipOval(child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
+                child: ClipOval(
+                    child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
               ),
               const SizedBox(width: 12),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('بطاقة العضو',
+                    Text('بطاقة العضو',
                         style: TextStyle(
-                            color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800)),
                     Text('Economics Pioneers Club',
                         style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.65),
-                            fontSize: 10,
-                            letterSpacing: 1.2)),
+                            color: Color(0xFFEBD08A), fontSize: 10, letterSpacing: 1.2)),
                   ],
                 ),
               ),
@@ -284,10 +256,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 22),
           Text('مرحباً، ${m.fullName}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text('${m.displaySpecialization} • ${m.level} • ${m.year}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 13)),
         ],
       ),

@@ -40,7 +40,7 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('البروفيل'));
+    await tester.tap(find.byIcon(Icons.person_outline));
     await tester.pumpAndSettle();
     await expectLater(find.byKey(const ValueKey('lp')), matchesGoldenFile('golden/leader_profile.png'));
   });

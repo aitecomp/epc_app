@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// ── هوية نادي رواد الاقتصاد ─────────────────────────────────────────────
 class AppColors {
@@ -347,3 +348,41 @@ void toast(BuildContext context, String message, {bool error = false}) {
       ),
     );
 }
+
+// ── مسافات آمنة للنظام (شريط الحالة + شريط التنقّل) ─────────────────────
+/// ارتفاع شريط التنقّل العائم + المسافة الآمنة السفلية
+const double kFloatingNavHeight = 66;
+const double kFloatingNavGap = 14;
+
+/// ما يجب تركه أسفل أي محتوى حتى لا يختلط بشريط التنقّل العائم
+double bottomInset(BuildContext context, {double extra = 16}) {
+  final safe = MediaQuery.paddingOf(context).bottom;
+  return kFloatingNavHeight + kFloatingNavGap + safe + extra;
+}
+
+/// المسافة العلوية الآمنة (شريط الحالة)
+double topInset(BuildContext context, {double extra = 14}) =>
+    MediaQuery.paddingOf(context).top + extra;
+
+// ── مظهر شريطي النظام (شفافان، وأيقونات تناسب الخلفية) ──────────────────
+/// خلفية فاتحة (بنفسجية) → أيقونات فاتحة
+const SystemUiOverlayStyle kSystemUiOnDark = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.light,
+  statusBarBrightness: Brightness.dark,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarDividerColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.light,
+  systemNavigationBarContrastEnforced: false,
+);
+
+/// خلفية كريمية → أيقونات داكنة
+const SystemUiOverlayStyle kSystemUiOnLight = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.light,
+  statusBarBrightness: Brightness.dark,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarDividerColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.dark,
+  systemNavigationBarContrastEnforced: false,
+);

@@ -10,6 +10,7 @@ class LeaderProfileTab extends StatelessWidget {
   final VoidCallback onEditProfile;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
+  final VoidCallback? onOpenDashboard;
 
   const LeaderProfileTab({
     super.key,
@@ -17,6 +18,7 @@ class LeaderProfileTab extends StatelessWidget {
     required this.onEditProfile,
     required this.onOpenSettings,
     required this.onLogout,
+    this.onOpenDashboard,
   });
 
   @override
@@ -27,7 +29,7 @@ class LeaderProfileTab extends StatelessWidget {
       padding: EdgeInsets.zero,
       children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(20, 58, 20, 26),
+          padding: EdgeInsets.fromLTRB(20, topInset(context) + 4, 20, 26),
           decoration: const BoxDecoration(
             gradient: AppColors.headerGradient,
             borderRadius: BorderRadius.only(
@@ -100,7 +102,7 @@ class LeaderProfileTab extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 110),
+          padding: EdgeInsets.fromLTRB(16, 18, 16, bottomInset(context)),
           child: Column(
             children: [
               MemberCardFlip(member: leader),
@@ -109,6 +111,13 @@ class LeaderProfileTab extends StatelessWidget {
                 title: 'إدارة الحساب',
                 child: Column(
                   children: [
+                    if (onOpenDashboard != null)
+                      _tile(
+                        icon: Icons.dashboard_customize_outlined,
+                        title: 'لوحة القيادة',
+                        subtitle: 'إحصاءات النادي وإدارة الأعضاء',
+                        onTap: onOpenDashboard!,
+                      ),
                     _tile(
                       icon: Icons.edit_outlined,
                       title: 'تعديل بطاقتي',

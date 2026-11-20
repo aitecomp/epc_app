@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/cloud_sync.dart';
+import '../core/notifications.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 
@@ -128,7 +129,7 @@ class _SettingsTabState extends State<SettingsTab> {
       padding: EdgeInsets.zero,
       children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(20, 58, 20, 24),
+          padding: EdgeInsets.fromLTRB(20, topInset(context) + 4, 20, 24),
           decoration: const BoxDecoration(
             gradient: AppColors.headerGradient,
             borderRadius: BorderRadius.only(
@@ -286,6 +287,71 @@ class _SettingsTabState extends State<SettingsTab> {
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.purple,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'إشعارات النشاطات',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppColors.gold.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.notifications_active_outlined,
+                              size: 19, color: AppColors.purple),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('إشعار فوري + منبّه بالموعد',
+                                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+                              SizedBox(height: 2),
+                              Text(
+                                'يصلك إشعار عند نشر نشاط، ومنبّه بالاهتزاز في اليوم والوقت المحدّد',
+                                style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 46,
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await Notifications.requestPermissions();
+                          await Notifications.showNow(
+                            id: 999001,
+                            title: 'نادي رواد الاقتصاد',
+                            body: 'الإشعارات تعمل ✓ — ستصلك تنبيهات النشاطات في وقتها.',
+                          );
+                          if (context.mounted) {
+                            toast(context, 'تم إرسال إشعار تجريبي');
+                          }
+                        },
+                        icon: const Icon(Icons.notification_add_outlined, size: 18),
+                        label: const Text('إرسال إشعار تجريبي',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.purple,
+                          side: BorderSide(color: AppColors.purple.withValues(alpha: 0.35)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ),

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../core/activity_notifier.dart';
 import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/glass_nav.dart';
+import 'activities_tab.dart';
 import 'leader_profile_tab.dart';
 import 'member_detail_screen.dart';
 import 'member_form_screen.dart';
@@ -25,6 +28,15 @@ class _LeaderShellState extends State<LeaderShell> {
   int _index = 0;
 
   MemberStore get store => widget.store;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      store.markActivitiesSeen();
+      ActivityNotifier.scheduleUpcoming(store);
+    });
+  }
 
   Future<void> _openForm({Member? member, bool leaderMode = false}) async {
     final saved = await Navigator.of(context).push<bool>(
@@ -56,6 +68,24 @@ class _LeaderShellState extends State<LeaderShell> {
             onOpenMember: _openMember,
             onEditMember: (m) => _openForm(member: m),
             onDeleteMember: _confirmDelete,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openDashboard() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.cream,
+          body: OverviewTab(
+            store: store,
+            onAddMember: () => _openForm(),
+            onOpenMember: _openMember,
+            onSeeAll: _openMembers,
+            onOpenMembers: _openMembers,
+            onOpenSettings: _openSettings,
           ),
         ),
       ),
@@ -123,29 +153,31 @@ class _LeaderShellState extends State<LeaderShell> {
 
   @override
   Widget build(BuildContext context) {
+    final leader = store.leaderMember;
     final tabs = [
-      OverviewTab(
+      ActivitiesTab(
         store: store,
-        onAddMember: () => _openForm(),
-        onOpenMember: _openMember,
-        onSeeAll: _openMembers,
-        onOpenMembers: _openMembers,
-        onOpenSettings: _openSettings,
+        isLeader: true,
+        memberName: leader.fullName,
+        onOpenProfile: () => setState(() => _index = 1),
       ),
       LeaderProfileTab(
         store: store,
         onEditProfile: () => _openForm(member: store.leaderMember, leaderMode: true),
         onOpenSettings: _openSettings,
         onLogout: widget.onLogout,
+        onOpenDashboard: _openDashboard,
       ),
     ];
 
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: kSystemUiOnLight,
+      child: Scaffold(
       extendBody: true,
       backgroundColor: AppColors.cream,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        child: KeyedSubtree(key: ValueKey(_index), child: tabs[_index]),
+      body: IndexedStack(
+        index: _index,
+        children: tabs,
       ),
       bottomNavigationBar: GlassNavBar(
         index: _index,
@@ -162,6 +194,7 @@ class _LeaderShellState extends State<LeaderShell> {
             label: 'البروفيل',
           ),
         ],
+      ),
       ),
     );
   }

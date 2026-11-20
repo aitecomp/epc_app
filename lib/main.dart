@@ -2,25 +2,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'dart:async';
+
+import 'core/activity_notifier.dart';
 import 'core/cloud_sync.dart';
+import 'core/notifications.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
 import 'screens/leader_shell.dart';
 import 'screens/login_screen.dart';
-import 'screens/profile_screen.dart';
+import 'screens/member_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // عرض من الحافة إلى الحافة مع شفافية شريطي الحالة والتنقّل
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarContrastEnforced: false,
   ));
+
   await MemberStore.instance.init();
+  // إشعارات النشاطات (فوري عند النشر + منبّه في الوقت المحدّد)
+  unawaited(Notifications.init());
+
   runApp(const EpcApp());
   // مزامنة سحابية في الخلفية (Cloudflare R2)
   if (CloudSync.enabled) {
     CloudSync.syncNow(MemberStore.instance);
   }
+  startBackgroundSync();
+}
+
+/// مزامنة دورية خفيفة كل دقيقة (تحديث النشاطات والإشعارات)
+void startBackgroundSync() {
+  if (!CloudSync.enabled) return;
+  Timer.periodic(const Duration(seconds: 60), (_) async {
+    if (MemberStore.instance.sessionReg == null) return;
+    await CloudSync.syncNow(MemberStore.instance);
+    await ActivityNotifier.scheduleUpcoming(MemberStore.instance);
+  });
 }
 
 class EpcApp extends StatelessWidget {
@@ -97,7 +124,7 @@ class _RootGateState extends State<RootGate> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _store.logout());
       return const _SplashScreen();
     }
-    return ProfileScreen(member: member, onLogout: _logout);
+    return MemberShell(store: _store, member: member, onLogout: _logout);
   }
 }
 

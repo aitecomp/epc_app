@@ -43,7 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: kSystemUiOnDark,
+      child: Scaffold(
       backgroundColor: AppColors.plum,
       body: Stack(
         children: [
@@ -84,6 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -251,6 +251,98 @@ class Member {
       );
 }
 
+/// ── نشاط / فعالية ينشرها القائد ───────────────────────────────────────
+const List<String> kWeekdaysAr = [
+  'الاثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس',
+  'الجمعة',
+  'السبت',
+  'الأحد',
+];
+
+class Activity {
+  final String id;
+  String title;
+  String details;
+  String place;
+  DateTime at; // اليوم + الوقت
+  DateTime createdAt;
+  DateTime updatedAt;
+
+  Activity({
+    required this.id,
+    required this.title,
+    this.details = '',
+    this.place = '',
+    required this.at,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  bool get isUpcoming => at.isAfter(DateTime.now());
+
+  String get weekdayLabel => kWeekdaysAr[(at.weekday - 1).clamp(0, 6)];
+
+  String get dateLabel =>
+      '${at.day.toString().padLeft(2, '0')}/${at.month.toString().padLeft(2, '0')}/${at.year}';
+
+  String get timeLabel =>
+      '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+
+  String get dayNumber => at.day.toString().padLeft(2, '0');
+
+  String get monthLabel {
+    const months = [
+      'جانفي',
+      'فيفري',
+      'مارس',
+      'أفريل',
+      'ماي',
+      'جوان',
+      'جويلية',
+      'أوت',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
+    ];
+    return months[(at.month - 1).clamp(0, 11)];
+  }
+
+  /// كم بقي على النشاط بصيغة مقروءة
+  String get remainingLabel {
+    final diff = at.difference(DateTime.now());
+    if (diff.isNegative) return 'انتهى';
+    if (diff.inDays > 0) return 'بعد ${diff.inDays} يوم';
+    if (diff.inHours > 0) return 'بعد ${diff.inHours} ساعة';
+    if (diff.inMinutes > 0) return 'بعد ${diff.inMinutes} دقيقة';
+    return 'الآن';
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'details': details,
+        'place': place,
+        'at': at.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+      };
+
+  static Activity fromJson(Map<String, dynamic> json) => Activity(
+        id: (json['id'] ?? '').toString(),
+        title: (json['title'] ?? '').toString(),
+        details: (json['details'] ?? '').toString(),
+        place: (json['place'] ?? '').toString(),
+        at: DateTime.tryParse((json['at'] ?? '').toString()) ?? DateTime.now(),
+        createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ?? DateTime.now(),
+        updatedAt: DateTime.tryParse((json['updatedAt'] ?? '').toString()) ?? DateTime.now(),
+      );
+}
+
 /// ── مخزن البيانات ──────────────────────────────────────────────────────
 class MemberStore extends ChangeNotifier {
   MemberStore._();
@@ -262,9 +354,23 @@ class MemberStore extends ChangeNotifier {
   static const _kLeaderPass = 'epc_leader_pass';
   static const _kDeleted = 'epc_deleted_v2';
   static const _kLeaderProfile = 'epc_leader_profile';
+  static const _kActivities = 'epc_activities_v2';
+  static const _kDeletedActivities = 'epc_deleted_activities_v2';
+  static const _kNotified = 'epc_notified_activities_v2';
 
   final List<Member> _members = [];
   final Map<String, DateTime> _deleted = {};
+  final List<Activity> _activities = [];
+  final Map<String, DateTime> _deletedActivities = {};
+
+  /// النشاطات التي جُدول لها منبّه بالفعل
+  final Map<String, DateTime> _notified = {};
+
+  /// النشاطات الجديدة التي لم تُفتح بعد (لشارة الإشعار)
+  final Set<String> _unseenActivities = {};
+
+  /// النشاطات القادمة من السحابة في آخر مزامنة (لإظهار إشعار فوري)
+  List<Activity> lastSyncedNewActivities = const [];
   Member? _leaderProfile;
   SharedPreferences? _prefs;
   bool ready = false;
@@ -337,6 +443,41 @@ class MemberStore extends ChangeNotifier {
       } catch (_) {}
     }
 
+    // النشاطات
+    final activitiesRaw = _prefs!.getString(_kActivities);
+    _activities.clear();
+    if (activitiesRaw != null && activitiesRaw.isNotEmpty) {
+      try {
+        final List data = jsonDecode(activitiesRaw) as List;
+        for (final item in data) {
+          _activities.add(Activity.fromJson(Map<String, dynamic>.from(item as Map)));
+        }
+      } catch (_) {}
+    }
+    _sortActivities();
+
+    final deletedActRaw = _prefs!.getString(_kDeletedActivities);
+    if (deletedActRaw != null && deletedActRaw.isNotEmpty) {
+      try {
+        final map = jsonDecode(deletedActRaw) as Map<String, dynamic>;
+        map.forEach((k, v) {
+          final at = DateTime.tryParse(v.toString());
+          if (at != null) _deletedActivities[k] = at;
+        });
+      } catch (_) {}
+    }
+
+    final notifiedRaw = _prefs!.getString(_kNotified);
+    if (notifiedRaw != null && notifiedRaw.isNotEmpty) {
+      try {
+        final map = jsonDecode(notifiedRaw) as Map<String, dynamic>;
+        map.forEach((k, v) {
+          final at = DateTime.tryParse(v.toString());
+          if (at != null) _notified[k] = at;
+        });
+      } catch (_) {}
+    }
+
     ready = true;
     notifyListeners();
   }
@@ -378,6 +519,14 @@ class MemberStore extends ChangeNotifier {
   Future<void> _persist() async {
     await _prefs?.setString(_kMembers, jsonEncode(_members.map((m) => m.toJson()).toList()));
     await _prefs?.setString(
+      _kActivities,
+      jsonEncode(_activities.map((a) => a.toJson()).toList()),
+    );
+    await _prefs?.setString(
+      _kDeletedActivities,
+      jsonEncode(_deletedActivities.map((k, v) => MapEntry(k, v.toIso8601String()))),
+    );
+    await _prefs?.setString(
       _kDeleted,
       jsonEncode(_deleted.map((k, v) => MapEntry(k, v.toIso8601String()))),
     );
@@ -388,6 +537,10 @@ class MemberStore extends ChangeNotifier {
   Map<String, dynamic> exportPayload() => {
         'members': _members.map((m) => m.toJson()).toList(),
         'deleted': _deleted.entries
+            .map((e) => {'id': e.key, 'at': e.value.toIso8601String()})
+            .toList(),
+        'activities': _activities.map((a) => a.toJson()).toList(),
+        'deletedActivities': _deletedActivities.entries
             .map((e) => {'id': e.key, 'at': e.value.toIso8601String()})
             .toList(),
       };
@@ -441,11 +594,132 @@ class MemberStore extends ChangeNotifier {
       }
     }
 
+    // ── النشاطات القادمة من السحابة ──
+    final remoteDeletedAct = <String, DateTime>{};
+    final deletedActList = payload['deletedActivities'];
+    if (deletedActList is List) {
+      for (final item in deletedActList) {
+        if (item is Map) {
+          final at = DateTime.tryParse('${item['at']}');
+          if (at != null && item['id'] != null) remoteDeletedAct['${item['id']}'] = at;
+        }
+      }
+    }
+    for (final entry in remoteDeletedAct.entries) {
+      final local = _deletedActivities[entry.key];
+      if (local == null || entry.value.isAfter(local)) {
+        _deletedActivities[entry.key] = entry.value;
+        final before = _activities.length;
+        _activities.removeWhere((a) => a.id == entry.key);
+        if (_activities.length != before) changed = true;
+      }
+    }
+
+    final newlyPublished = <Activity>[];
+    final actList = payload['activities'];
+    if (actList is List) {
+      final now = DateTime.now();
+      for (final item in actList) {
+        if (item is! Map) continue;
+        final incoming = Activity.fromJson(Map<String, dynamic>.from(item));
+        if (incoming.id.isEmpty) continue;
+        final tomb = _deletedActivities[incoming.id];
+        if (tomb != null && !incoming.updatedAt.isAfter(tomb)) continue;
+
+        final index = _activities.indexWhere((a) => a.id == incoming.id);
+        if (index < 0) {
+          _activities.add(incoming);
+          changed = true;
+          // نشاط جديد لم يُنبَّه عنه بعد
+          if (!_notified.containsKey(incoming.id) && incoming.at.isAfter(now)) {
+            newlyPublished.add(incoming);
+          }
+        } else if (incoming.updatedAt.isAfter(_activities[index].updatedAt)) {
+          _activities[index] = incoming;
+          changed = true;
+        }
+      }
+      if (newlyPublished.isNotEmpty) {
+        _sortActivities();
+        _unseenActivities.addAll(newlyPublished.map((a) => a.id));
+        lastSyncedNewActivities = newlyPublished;
+        for (final a in newlyPublished) {
+          _notified[a.id] = now;
+        }
+        await _saveNotified();
+      }
+    }
+
     if (changed) {
       _members.sort((a, b) => a.fullName.compareTo(b.fullName));
+      _sortActivities();
       await _persist();
     }
     return changed;
+  }
+
+  // ── عمليات النشاطات ───────────────────────────────────────────────────
+  void _sortActivities() {
+    _activities.sort((a, b) {
+      final aUp = a.at.isAfter(DateTime.now());
+      final bUp = b.at.isAfter(DateTime.now());
+      if (aUp != bUp) return aUp ? -1 : 1;
+      return aUp ? a.at.compareTo(b.at) : b.at.compareTo(a.at);
+    });
+  }
+
+  Future<void> _saveNotified() async {
+    await _prefs?.setString(
+      _kNotified,
+      jsonEncode(_notified.map((k, v) => MapEntry(k, v.toIso8601String()))),
+    );
+  }
+
+  /// كل النشاطات (القادمة أولاً)
+  List<Activity> get activities => List.unmodifiable(_activities);
+
+  List<Activity> get upcomingActivities =>
+      _activities.where((a) => a.isUpcoming).toList(growable: false);
+
+  List<Activity> get pastActivities =>
+      _activities.where((a) => !a.isUpcoming).toList(growable: false);
+
+  int get unseenActivitiesCount => _unseenActivities.length;
+
+  bool isActivityUnseen(String id) => _unseenActivities.contains(id);
+
+  void markActivitiesSeen() {
+    if (_unseenActivities.isEmpty) return;
+    _unseenActivities.clear();
+    notifyListeners();
+  }
+
+  bool isActivityNotified(String id) => _notified.containsKey(id);
+
+  Future<void> markActivityNotified(String id) async {
+    _notified[id] = DateTime.now();
+    await _saveNotified();
+  }
+
+  Future<void> saveActivity(Activity activity) async {
+    activity.updatedAt = DateTime.now();
+    final index = _activities.indexWhere((a) => a.id == activity.id);
+    if (index >= 0) {
+      _activities[index] = activity;
+    } else {
+      _activities.add(activity);
+    }
+    _sortActivities();
+    await _persist();
+  }
+
+  Future<void> deleteActivity(String id) async {
+    _activities.removeWhere((a) => a.id == id);
+    _deletedActivities[id] = DateTime.now();
+    _notified.remove(id);
+    _unseenActivities.remove(id);
+    await _saveNotified();
+    await _persist();
   }
 
   /// الدخول: قائد أو عضو

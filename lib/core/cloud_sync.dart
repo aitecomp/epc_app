@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'activity_notifier.dart';
 import 'store.dart';
 
 /// مزامنة سحابية عبر Cloudflare R2 (Worker: /members)
@@ -69,6 +70,8 @@ class CloudSync {
     }
     final pushed = await push(store);
     if (changed) store.notify();
+    // إشعارات النشاطات الجديدة + جدولة المنبّهات
+    await ActivityNotifier.afterSync(store);
     return pushed;
   }
 

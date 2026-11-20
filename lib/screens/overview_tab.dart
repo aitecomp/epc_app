@@ -32,7 +32,7 @@ class OverviewTab extends StatelessWidget {
       children: [
         _header(context),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 110),
+          padding: EdgeInsets.fromLTRB(16, 20, 16, bottomInset(context)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -207,7 +207,7 @@ class OverviewTab extends StatelessWidget {
 
   Widget _header(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 58, 20, 24),
+      padding: EdgeInsets.fromLTRB(20, topInset(context) + 4, 20, 24),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.only(

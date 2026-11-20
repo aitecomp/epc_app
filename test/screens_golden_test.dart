@@ -99,7 +99,10 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     await tester.pumpWidget(wrap(
-      ProfileScreen(member: MemberStore.instance.members.first, onLogout: () {}),
+      Scaffold(
+        backgroundColor: AppColors.cream,
+        body: ProfileScreen(member: MemberStore.instance.members.first, onLogout: () {}),
+      ),
       'profile',
     ));
     await tester.pumpAndSettle();
