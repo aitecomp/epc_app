@@ -99,7 +99,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final path = await recorder.stop();
         if (mounted) setState(() { recording = false; sending = true; });
         if (path != null) {
-          final mime = kIsWeb ? 'audio/webm' : 'audio/mp4';
+          const mime = kIsWeb ? 'audio/webm' : 'audio/mp4';
           final id = await api.upload(await XFile(path).readAsBytes(), mime);
           if (mounted) setState(() => sending = false);
           await send(media: id);

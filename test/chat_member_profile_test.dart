@@ -27,9 +27,10 @@ void main() {
     await tester.tap(find.byType(MemberCardFlip));
     await tester.pumpAndSettle();
     expect(find.byType(QrBlock), findsOneWidget);
-    expect(tester.widget<QrImageView>(find.byType(QrImageView)).data, contains('member-reg'));
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(tester.widget<QrBlock>(find.byType(QrBlock)).member.regNumber, 'member-reg');
     expect(find.text('member-reg'), findsWidgets);
-    await tester.scrollUntilVisible(find.text('member-email'), 250, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(find.text('member-email').last, 250, scrollable: find.byType(Scrollable).first);
     expect(find.text('member-phone'), findsWidgets);
     expect(find.text('member-email'), findsWidgets);
     expect(find.text('secret-pass'), findsNothing);
