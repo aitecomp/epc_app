@@ -7,6 +7,7 @@ import 'dart:async';
 import 'core/activity_notifier.dart';
 import 'core/cloud_sync.dart';
 import 'core/notifications.dart';
+import 'core/push_notifications.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
 import 'screens/leader_shell.dart';
@@ -30,7 +31,8 @@ void main() async {
 
   await MemberStore.instance.init();
   // إشعارات النشاطات (فوري عند النشر + منبّه في الوقت المحدّد)
-  unawaited(Notifications.init());
+  await Notifications.init();
+  await PushNotifications.init();
 
   runApp(const EpcApp());
   // مزامنة سحابية في الخلفية (Cloudflare R2)

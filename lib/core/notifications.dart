@@ -16,7 +16,7 @@ class Notifications {
   static const String channelDesc = 'إشعارات النشاطات والفعاليات الخاصة بنادي رواد الاقتصاد';
 
   /// تهيئة الخدمة (تُستدعى مرة واحدة عند الإقلاع)
-  static Future<void> init() async {
+  static Future<void> init({bool requestPermission = true}) async {
     if (_ready) return;
     try {
       tzdata.initializeTimeZones();
@@ -39,7 +39,7 @@ class Notifications {
       );
       await _plugin.initialize(settings: settings);
       _ready = true;
-      await requestPermissions();
+      if (requestPermission) await requestPermissions();
     } catch (_) {
       _ready = false;
     }

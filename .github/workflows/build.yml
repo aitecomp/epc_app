@@ -43,11 +43,12 @@ jobs:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SYNC_KEY_VALUE: ${{ secrets.SYNC_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$CF_TOKEN" ]; then echo "::notice::تم تخطي نشر Worker"; exit 0; fi
           cd cloudflare
           python3 - "$SYNC_KEY_VALUE" <<'PY'
-          import json, sys
+          import json, sys, os
           meta = {
             "main_module": "worker.js",
             "compatibility_date": "2026-01-01",
@@ -56,6 +57,9 @@ jobs:
               {"type": "secret_text", "name": "SYNC_KEY", "text": sys.argv[1]},
             ],
           }
+          firebase = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+          if firebase:
+            meta["bindings"].append({"type": "secret_text", "name": "FIREBASE_SERVICE_ACCOUNT", "text": firebase})
           open("metadata.json", "w").write(json.dumps(meta))
           PY
           curl -sS -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/scripts/epc-sync" \
@@ -236,19 +240,19 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.9.0
-          name: EPC App v1.9.0 — نادي رواد الاقتصاد
+          tag_name: v1.10.0
+          name: EPC App v1.10.0 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.9.0 — توافق أوسع للتثبيت
+            ### الإصدار 1.10.0 — توافق أوسع للتثبيت
 
             **ملفات APK فقط هي التي تُثبَّت** — لا تُثبّت ملفات `.aab` (متجر Google Play فقط).
 
             | الملف | لمن؟ |
             |---|---|
-            | `EPC-Club-1.9.0-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
-            | `EPC-Club-1.9.0-universal.apk` | يعمل على كل الأجهزة |
-            | ⛔ `EPC-Club-1.9.0-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
+            | `EPC-Club-1.10.0-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
+            | `EPC-Club-1.10.0-universal.apk` | يعمل على كل الأجهزة |
+            | ⛔ `EPC-Club-1.10.0-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
 
             **رابط تنزيل مباشر:** https://epc-sync.salemdopamine.workers.dev/app
             **الويب:** https://epc-club.pages.dev — https://aitecomp.github.io/epc_app/
@@ -259,7 +263,7 @@ jobs:
             3. احذف النسخة القديمة من التطبيق أولًا (اختلاف مفتاح التوقيع يمنع التحديث).
             4. على سامسونج: الإعدادات ← الأمان والخصوصية ← **Auto Blocker** ← إيقافه.
             5. على شاومي/ريدمي: الإعدادات ← الخصوصية ← تثبيت من مصادر غير معروفة ← السماح.
-            6. جرّب `EPC-Club-1.9.0-universal.apk` بدل نسخة arm64.
+            6. جرّب `EPC-Club-1.10.0-universal.apk` بدل نسخة arm64.
           files: |
             out/*.apk
             out/SHA256.txt

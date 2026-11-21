@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/activity_notifier.dart';
 import '../core/cloud_sync.dart';
+import '../core/push_notifications.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import 'activity_form_screen.dart';
@@ -45,10 +46,10 @@ class ActivitiesTab extends StatelessWidget {
       await store.markActivityNotified(saved.id);
     }
     final synced = await CloudSync.push(store);
+    final pushed = synced && await PushNotifications.publish(saved, updated: activity != null);
     if (context.mounted) {
-      toast(context, synced
-          ? (activity == null ? 'تم حفظ النشاط ومزامنته' : 'تم تحديث النشاط ومزامنته')
-          : 'حُفظ النشاط على هذا الجهاز، تعذّرت المزامنة');
+      toast(context, !synced ? 'حُفظ النشاط على هذا الجهاز، تعذّرت المزامنة' :
+          pushed ? 'تم حفظ النشاط وإرسال طلب الإشعار' : 'تمت المزامنة، لكن تعذّر إرسال الإشعار');
     }
   }
 
@@ -72,8 +73,9 @@ class ActivitiesTab extends StatelessWidget {
     if (ok != true) return;
     await store.deleteActivity(activity.id);
     await ActivityNotifier.onDeleted(activity.id);
-    CloudSync.pushInBackground(store);
-    if (context.mounted) toast(context, 'تم حذف النشاط');
+    final synced = await CloudSync.push(store);
+    if (synced) await PushNotifications.publish(activity, deleted: true);
+    if (context.mounted) toast(context, synced ? 'تم حذف النشاط' : 'حُذف محلياً، تعذّرت المزامنة');
   }
 
   @override
