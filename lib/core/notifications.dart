@@ -93,6 +93,28 @@ class Notifications {
         ),
       );
 
+  /// إشعار منبّه مستمر على أندرويد، مع زر لإيقافه.
+  /// دعم تكرار الصوت تحدده سياسة الإشعارات والشركة المصنّعة للجهاز.
+  static NotificationDetails get _alarmDetails => NotificationDetails(
+    android: AndroidNotificationDetails(
+      'epc_activity_alarm_v1', 'منبّهات النشاطات',
+      channelDescription: 'تذكير النشاط في موعده',
+      importance: Importance.max,
+      priority: Priority.max,
+      category: AndroidNotificationCategory.alarm,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      playSound: true,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList(const [0, 800, 300, 800, 300]),
+      ongoing: true,
+      autoCancel: false,
+      additionalFlags: Int32List.fromList(const [4]),
+      actions: const [AndroidNotificationAction('stop_alarm', 'إيقاف المنبّه', cancelNotification: true)],
+      color: const Color(0xFF4B1E8C),
+    ),
+    iOS: const DarwinNotificationDetails(presentAlert: true, presentSound: true),
+  );
+
   /// إشعار فوري
   static Future<void> showNow({
     required int id,
@@ -129,7 +151,7 @@ class Notifications {
         title: title,
         body: body,
         scheduledDate: at,
-        notificationDetails: _details,
+        notificationDetails: _alarmDetails,
         payload: activityId,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
@@ -142,7 +164,7 @@ class Notifications {
           title: title,
           body: body,
           scheduledDate: at,
-          notificationDetails: _details,
+          notificationDetails: _alarmDetails,
           payload: activityId,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );

@@ -357,6 +357,7 @@ class MemberStore extends ChangeNotifier {
   static const _kActivities = 'epc_activities_v2';
   static const _kDeletedActivities = 'epc_deleted_activities_v2';
   static const _kNotified = 'epc_notified_activities_v2';
+  static const _kUnseen = 'epc_unseen_activities_v2';
 
   final List<Member> _members = [];
   final Map<String, DateTime> _deleted = {};
@@ -443,6 +444,10 @@ class MemberStore extends ChangeNotifier {
       } catch (_) {}
     }
 
+    _unseenActivities
+      ..clear()
+      ..addAll(_prefs!.getStringList(_kUnseen) ?? const <String>[]);
+
     // النشاطات
     final activitiesRaw = _prefs!.getString(_kActivities);
     _activities.clear();
@@ -517,6 +522,7 @@ class MemberStore extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
+    await _prefs?.setStringList(_kUnseen, _unseenActivities.toList());
     await _prefs?.setString(_kMembers, jsonEncode(_members.map((m) => m.toJson()).toList()));
     await _prefs?.setString(
       _kActivities,
@@ -687,6 +693,7 @@ class MemberStore extends ChangeNotifier {
   void markActivitiesSeen() {
     if (_unseenActivities.isEmpty) return;
     _unseenActivities.clear();
+    _prefs?.setStringList(_kUnseen, const <String>[]);
     notifyListeners();
   }
 

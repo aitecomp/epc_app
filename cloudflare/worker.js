@@ -25,7 +25,7 @@ const json = (data, status = 200) =>
 const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)))
   .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const enc = new TextEncoder();
-async function sendActivityPush(env, data) {
+async function sendActivityPush(env, data, validateOnly = false) {
   const account = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT || '{}');
   if (!account.private_key || !account.client_email || !account.project_id) throw new Error('Firebase credentials not configured');
   const now = Math.floor(Date.now() / 1000);
@@ -44,7 +44,7 @@ async function sendActivityPush(env, data) {
   const token = (await tokenResponse.json()).access_token;
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
     method:'POST', headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},
-    body:JSON.stringify({message:{topic:'epc_activities',android:{priority:'high',ttl:'86400s'},data}})
+    body:JSON.stringify({validate_only: validateOnly, message:{topic:'epc_activities',android:{priority:'high',ttl:'86400s'},data}})
   });
   if (!response.ok) throw new Error(`FCM failed: ${response.status}`);
   return await response.json();
@@ -83,7 +83,7 @@ export default {
       try { input = await request.json(); } catch (_) { return json({error:'invalid json'}, 400); }
       if (!input || typeof input.id !== 'string' || !input.id || typeof input.title !== 'string' || !input.title || !['create','update','delete'].includes(input.operation) || typeof input.at !== 'string') return json({error:'invalid activity'}, 400);
       const data = {id:input.id.slice(0,200), title:input.title.slice(0,200), place:String(input.place || '').slice(0,200), at:input.at.slice(0,50), operation:input.operation};
-      try { await sendActivityPush(env, data); return json({ok:true}); }
+      try { await sendActivityPush(env, data, input.validate_only === true); return json({ok:true, validated: input.validate_only === true}); }
       catch (e) { console.error('push failed', e.message); return json({error:'push unavailable'}, 502); }
     }
 
