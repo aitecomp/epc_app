@@ -81,6 +81,15 @@ jobs:
             -d '{"enabled":true}' -o /dev/null -w "subdomain: %{http_code}\n"
           head -c 300 /tmp/worker-out.json
 
+      - name: Verify R2 conditional writes
+        env:
+          TEST_URL: ${{ secrets.SYNC_URL }}
+          TEST_KEY: ${{ secrets.SYNC_KEY }}
+        run: |
+          set -e
+          curl --fail-with-body -sS -X POST "${TEST_URL%/}/sync-check" -H "x-sync-key: $TEST_KEY" \
+            | python3 -c 'import json,sys; assert json.load(sys.stdin).get("ok"); print("R2 conditional writes verified")'
+
       - name: Verify deployed chat account access
         env:
           TEST_URL: ${{ secrets.SYNC_URL }}
@@ -210,6 +219,9 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
+      - name: Test activity synchronization
+        run: flutter test test/activities_test.dart
+
       - name: Build signed APK (universal)
         run: |
           flutter build apk --release \
@@ -282,19 +294,19 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.11.0
-          name: EPC App v1.11.0 — نادي رواد الاقتصاد
+          tag_name: v1.12.0
+          name: EPC App v1.12.0 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.11.0 — توافق أوسع للتثبيت
+            ### الإصدار 1.12.0 — توافق أوسع للتثبيت
 
             **ملفات APK فقط هي التي تُثبَّت** — لا تُثبّت ملفات `.aab` (متجر Google Play فقط).
 
             | الملف | لمن؟ |
             |---|---|
-            | `EPC-Club-1.11.0-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
-            | `EPC-Club-1.11.0-universal.apk` | يعمل على كل الأجهزة |
-            | ⛔ `EPC-Club-1.11.0-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
+            | `EPC-Club-1.12.0-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
+            | `EPC-Club-1.12.0-universal.apk` | يعمل على كل الأجهزة |
+            | ⛔ `EPC-Club-1.12.0-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
 
             **رابط تنزيل مباشر:** https://epc-sync.salemdopamine.workers.dev/app
             **الويب:** https://epc-club.pages.dev — https://aitecomp.github.io/epc_app/
@@ -305,7 +317,7 @@ jobs:
             3. احذف النسخة القديمة من التطبيق أولًا (اختلاف مفتاح التوقيع يمنع التحديث).
             4. على سامسونج: الإعدادات ← الأمان والخصوصية ← **Auto Blocker** ← إيقافه.
             5. على شاومي/ريدمي: الإعدادات ← الخصوصية ← تثبيت من مصادر غير معروفة ← السماح.
-            6. جرّب `EPC-Club-1.11.0-universal.apk` بدل نسخة arm64.
+            6. جرّب `EPC-Club-1.12.0-universal.apk` بدل نسخة arm64.
           files: |
             out/*.apk
             out/SHA256.txt

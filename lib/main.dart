@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'dart:async';
 
 import 'core/activity_notifier.dart';
+import 'core/chat_unread.dart';
 import 'core/cloud_sync.dart';
 import 'core/notifications.dart';
 import 'core/push_notifications.dart';
@@ -18,6 +19,7 @@ import 'screens/member_shell.dart';
 final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> openActivity(String id) async {
+  if (id == 'chat') { ChatUnread.openRequested.value++; return; }
   if (CloudSync.enabled) await CloudSync.syncNow(MemberStore.instance);
   if (MemberStore.instance.sessionReg == null) return;
   final matches = MemberStore.instance.activities.where((a) => a.id == id);
@@ -104,19 +106,28 @@ class RootGate extends StatefulWidget {
   State<RootGate> createState() => _RootGateState();
 }
 
-class _RootGateState extends State<RootGate> {
+class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
   final MemberStore _store = MemberStore.instance;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _store.addListener(_onChange);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _store.removeListener(_onChange);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && CloudSync.enabled) {
+      unawaited(CloudSync.syncNow(_store));
+    }
   }
 
   void _onChange() {

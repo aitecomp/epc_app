@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/activity_notifier.dart';
+import '../core/chat_unread.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/glass_nav.dart';
@@ -35,6 +36,8 @@ class _MemberShellState extends State<MemberShell> {
   @override
   void initState() {
     super.initState();
+    ChatUnread.count.addListener(_chatChanged);
+    ChatUnread.openRequested.addListener(_openChatFromNotification);
     _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) { if (mounted) setState(() {}); });
     widget.store.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -44,6 +47,8 @@ class _MemberShellState extends State<MemberShell> {
 
   @override
   void dispose() {
+    ChatUnread.count.removeListener(_chatChanged);
+    ChatUnread.openRequested.removeListener(_openChatFromNotification);
     _clockTimer?.cancel();
     widget.store.removeListener(_onChange);
     super.dispose();
@@ -52,6 +57,9 @@ class _MemberShellState extends State<MemberShell> {
   void _onChange() {
     if (mounted) setState(() {});
   }
+
+  void _chatChanged() { if (mounted) setState(() {}); }
+  void _openChatFromNotification() { if (mounted) setState(() => _index = 1); }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +80,7 @@ class _MemberShellState extends State<MemberShell> {
             memberName: member.fullName,
             onOpenProfile: () => setState(() => _index = 2),
           ),
-          ChatScreen(store: widget.store),
+          ChatScreen(store: widget.store, isActive: _index == 1),
           ProfileScreen(member: member, onLogout: widget.onLogout),
         ],
       ),
@@ -85,7 +93,8 @@ class _MemberShellState extends State<MemberShell> {
             activeIcon: Icons.home_rounded,
             label: unseen > 0 ? 'الرئيسية • $unseen' : 'الرئيسية',
           ),
-          const GlassNavItem(
+          GlassNavItem(
+            badge: ChatUnread.count.value, messenger: true,
             icon: Icons.forum_outlined,
             activeIcon: Icons.forum_rounded,
             label: 'الدردشة',

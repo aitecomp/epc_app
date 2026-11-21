@@ -624,7 +624,6 @@ class MemberStore extends ChangeNotifier {
     final newlyPublished = <Activity>[];
     final actList = payload['activities'];
     if (actList is List) {
-      final now = DateTime.now();
       for (final item in actList) {
         if (item is! Map) continue;
         final incoming = Activity.fromJson(Map<String, dynamic>.from(item));
@@ -637,7 +636,7 @@ class MemberStore extends ChangeNotifier {
           _activities.add(incoming);
           changed = true;
           // نشاط جديد لم يُنبَّه عنه بعد
-          if (!_notified.containsKey(incoming.id) && incoming.at.isAfter(now)) {
+          if (!_notified.containsKey(incoming.id)) {
             newlyPublished.add(incoming);
           }
         } else if (incoming.updatedAt.isAfter(_activities[index].updatedAt)) {

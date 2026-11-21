@@ -64,15 +64,11 @@ class CloudSync {
   static Future<bool> syncNow(MemberStore store) async {
     if (!enabled) return false;
     final remote = await pull();
-    bool changed = false;
-    if (remote != null) {
-      changed = await store.applyRemotePayload(remote);
-    }
-    final pushed = await push(store);
+    if (remote == null) return false;
+    final changed = await store.applyRemotePayload(remote);
     if (changed) store.notify();
-    // إشعارات النشاطات الجديدة + جدولة المنبّهات
     await ActivityNotifier.afterSync(store);
-    return pushed;
+    return true;
   }
 
   /// رفع في الخلفية دون إعاقة الواجهة

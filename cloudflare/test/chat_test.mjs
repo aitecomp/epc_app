@@ -5,9 +5,12 @@ if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", {value: webc
 const source=await readFile(new URL('../worker.js',import.meta.url),'utf8');
 const worker=(await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)).default;
 class Bucket {
-  constructor(){this.map=new Map()}
-  async put(k,value,opts={}) { const bytes=typeof value==='string'?new TextEncoder().encode(value):new Uint8Array(value);this.map.set(k,{bytes,opts}); }
-  async get(k, options={}){const e=this.map.get(k);if(!e)return null; const range=options.range; const body=range ? e.bytes.slice(range.offset,range.offset+range.length) : e.bytes; return {body,size:e.bytes.length,customMetadata:e.opts.customMetadata,httpMetadata:e.opts.httpMetadata,async json(){return JSON.parse(new TextDecoder().decode(e.bytes))},async text(){return new TextDecoder().decode(e.bytes)}}}
+  constructor(){this.map=new Map();this.version=0;}
+  async put(k,value,opts={}) { const previous=this.map.get(k); const cond=opts.onlyIf;
+    if (cond?.etagMatches && previous?.etag !== cond.etagMatches) return null;
+    if (cond?.etagDoesNotMatch === '*' && previous) return null;
+    const bytes=typeof value==='string'?new TextEncoder().encode(value):new Uint8Array(value); const entry={bytes,opts,etag:String(++this.version)};this.map.set(k,entry);return entry; }
+  async get(k, options={}){const e=this.map.get(k);if(!e)return null; const range=options.range; const body=range ? e.bytes.slice(range.offset,range.offset+range.length) : e.bytes; return {body,etag:e.etag,size:e.bytes.length,customMetadata:e.opts.customMetadata,httpMetadata:e.opts.httpMetadata,async json(){return JSON.parse(new TextDecoder().decode(e.bytes))},async text(){return new TextDecoder().decode(e.bytes)}}}
   async head(k){return this.get(k)}
   async delete(k){this.map.delete(k)}
   async list({prefix}){return {objects:[...this.map.keys()].filter(k=>k.startsWith(prefix)).sort().map(key=>({key})),truncated:false}}
@@ -26,4 +29,13 @@ const list=await (await req('/chat/messages')).json();assert.equal(list.messages
 assert.equal((await worker.fetch(new Request(list.messages[0].mediaUrl),env)).status,200);
 const partial=await worker.fetch(new Request(list.messages[0].mediaUrl,{headers:{range:'bytes=0-1'}}),env);assert.equal(partial.status,206);assert.equal((await partial.arrayBuffer()).byteLength,2);
 assert.equal((await worker.fetch(new Request(base+'/chat/media/'+media.id),env)).status,401);
-console.log('Chat worker tests passed');
+const activity={id:'activity1',title:'test',updatedAt:'2026-11-21T12:00:00Z'};
+const putSync=async payload=>req('/members','PUT',JSON.stringify(payload),{'content-type':'application/json'});
+assert.equal((await putSync({members:[],activities:[activity]})).status,200);
+assert.equal((await putSync({members:[],activities:[]})).status,200);
+assert.equal((await (await req('/members')).json()).activities[0].id,'activity1');
+assert.equal((await putSync({members:[],activities:[],deletedActivities:[{id:'activity1',at:'2026-11-21T13:00:00Z'}]})).status,200);
+assert.equal((await putSync({members:[],activities:[activity]})).status,200);
+assert.equal((await (await req('/members')).json()).activities.length,0);
+assert.equal((await (await req('/sync-check','POST')).json()).ok,true);
+console.log('Chat and safe sync worker tests passed');

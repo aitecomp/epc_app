@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/activity_notifier.dart';
+import '../core/chat_unread.dart';
 import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
@@ -36,6 +37,8 @@ class _LeaderShellState extends State<LeaderShell> {
   @override
   void initState() {
     super.initState();
+    ChatUnread.count.addListener(_chatChanged);
+    ChatUnread.openRequested.addListener(_openChatFromNotification);
     _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) { if (mounted) setState(() {}); });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ActivityNotifier.scheduleUpcoming(store);
@@ -44,6 +47,8 @@ class _LeaderShellState extends State<LeaderShell> {
 
   @override
   void dispose() {
+    ChatUnread.count.removeListener(_chatChanged);
+    ChatUnread.openRequested.removeListener(_openChatFromNotification);
     _clockTimer?.cancel();
     super.dispose();
   }
@@ -161,6 +166,9 @@ class _LeaderShellState extends State<LeaderShell> {
     }
   }
 
+  void _chatChanged() { if (mounted) setState(() {}); }
+  void _openChatFromNotification() { if (mounted) setState(() => _index = 1); }
+
   @override
   Widget build(BuildContext context) {
     final leader = store.leaderMember;
@@ -171,7 +179,7 @@ class _LeaderShellState extends State<LeaderShell> {
         memberName: leader.fullName,
         onOpenProfile: () => setState(() => _index = 2),
       ),
-      ChatScreen(store: store),
+      ChatScreen(store: store, isActive: _index == 1),
       LeaderProfileTab(
         store: store,
         onEditProfile: () => _openForm(member: store.leaderMember, leaderMode: true),
@@ -193,13 +201,14 @@ class _LeaderShellState extends State<LeaderShell> {
       bottomNavigationBar: GlassNavBar(
         index: _index,
         onTap: (i) => setState(() => _index = i),
-        items: const [
+        items: [
           GlassNavItem(
             icon: Icons.home_outlined,
             activeIcon: Icons.home_rounded,
             label: 'الرئيسية',
           ),
           GlassNavItem(
+            badge: ChatUnread.count.value, messenger: true,
             icon: Icons.forum_outlined,
             activeIcon: Icons.forum_rounded,
             label: 'الدردشة',

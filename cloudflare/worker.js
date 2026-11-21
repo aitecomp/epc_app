@@ -101,7 +101,7 @@ async function serveChatMedia(request, env, id, url) {
   headers.set('cache-control','private, no-store');
   return new Response(obj.body,{headers,status: match ? 206 : 200});
 }
-async function chatHandler(request, env, url) {
+async function chatHandler(request, env, url, ctx) {
   const actor = await chatActor(request,env);
   if (!actor) return json({error:'invalid account'},401);
   const path = url.pathname;
@@ -130,6 +130,10 @@ async function chatHandler(request, env, url) {
       replyName:typeof data.replyName === 'string' ? data.replyName.slice(0,100) : '',
       createdAt:new Date().toISOString()};
     await env.EPC_BUCKET.put(`chat/messages/${id}`,JSON.stringify(message),{httpMetadata:{contentType:'application/json'}});
+    if (ctx && env.FIREBASE_SERVICE_ACCOUNT) {
+      const senderHash=b64url(await crypto.subtle.digest('SHA-256',enc.encode(actor.id)));
+      ctx.waitUntil(sendActivityPush(env,{kind:'chat',id,senderHash}).catch(e=>console.error('chat push failed',e.message)));
+    }
     return json({ok:true,id});
   }
   if (path === '/chat/react' && request.method === 'POST') {
@@ -162,8 +166,32 @@ async function chatHandler(request, env, url) {
   return json({error:'not found'},404);
 }
 
+// Merge snapshots by stable IDs and timestamps so a stale device cannot erase data.
+function mergeSnapshots(oldData, incoming) {
+  const date = v => {const n=Date.parse(v || ''); return Number.isFinite(n) ? n : 0;};
+  const byId=(a,b,timeField) => {
+    const map=new Map();
+    for (const item of [...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])]) {
+      if (!item || typeof item.id !== 'string' || !item.id) continue;
+      const current=map.get(item.id);
+      if (!current || date(item[timeField]) > date(current[timeField])) map.set(item.id,item);
+    }
+    return [...map.values()];
+  };
+  const deleted=byId(oldData.deleted,incoming.deleted,'at');
+  const deletedActivities=byId(oldData.deletedActivities,incoming.deletedActivities,'at');
+  const keep=(items,tombs) => {
+    const times=new Map(tombs.map(t=>[t.id,date(t.at)]));
+    return items.filter(x=>!times.has(x.id) || date(x.updatedAt)>times.get(x.id));
+  };
+  return {...oldData,...incoming,
+    members:keep(byId(oldData.members,incoming.members,'updatedAt'),deleted),deleted,
+    activities:keep(byId(oldData.activities,incoming.activities,'updatedAt'),deletedActivities),deletedActivities,
+    version:(Number(oldData.version)||0)+1,updatedAt:new Date().toISOString()};
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     const url = new URL(request.url);
@@ -192,7 +220,18 @@ export default {
       return json({ error: 'unauthorized' }, 401);
     }
 
-    if (path.startsWith('/chat/')) return chatHandler(request, env, url);
+    if (path === '/sync-check' && request.method === 'POST') {
+      const testKey=`checks/${crypto.randomUUID()}`;
+      try {
+        const first=await env.EPC_BUCKET.put(testKey,'first',{onlyIf:{etagDoesNotMatch:'*'}});
+        const obj=await env.EPC_BUCKET.get(testKey);
+        const bad=await env.EPC_BUCKET.put(testKey,'bad',{onlyIf:{etagMatches:'not-an-etag'}});
+        const good=await env.EPC_BUCKET.put(testKey,'second',{onlyIf:{etagMatches:obj.etag}});
+        return json({ok:!!first && !!obj && !bad && !!good});
+      } finally { await env.EPC_BUCKET.delete(testKey); }
+    }
+
+    if (path.startsWith('/chat/')) return chatHandler(request, env, url, ctx);
 
     if (path === '/notify' && request.method === 'POST') {
       let input;
@@ -234,14 +273,17 @@ export default {
       }
       if (!parsed || !Array.isArray(parsed.members)) return json({ error: 'members[] required' }, 400);
 
-      parsed.version = (parsed.version || 0) + 1;
-      parsed.updatedAt = new Date().toISOString();
-
-      await env.EPC_BUCKET.put('members.json', JSON.stringify(parsed), {
-        httpMetadata: { contentType: 'application/json; charset=utf-8' },
-      });
-
-      return json({ ok: true, version: parsed.version, count: parsed.members.length });
+      for (let attempt=0; attempt<8; attempt++) {
+        const prior=await env.EPC_BUCKET.get('members.json');
+        const oldData=prior ? await prior.json() : {};
+        const merged=mergeSnapshots(oldData,parsed);
+        const result=await env.EPC_BUCKET.put('members.json', JSON.stringify(merged), {
+          onlyIf: prior ? {etagMatches: prior.etag} : {etagDoesNotMatch: '*'},
+          httpMetadata: {contentType:'application/json; charset=utf-8'},
+        });
+        if (result) return json({ok:true,version:merged.version,count:merged.members.length});
+      }
+      return json({error:'sync conflict; retry'},409);
     }
 
     return json({ error: 'method not allowed' }, 405);

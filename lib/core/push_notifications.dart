@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -37,6 +39,17 @@ class PushNotifications {
     final data = message.data;
     final id = data['id']?.toString() ?? '';
     if (id.isEmpty) return;
+    if (data['kind'] == 'chat') {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final reg = prefs.getString('epc_session_v2');
+      if (reg == null) return;
+      final hash = base64Url.encode(sha256.convert(utf8.encode(reg)).bytes).replaceAll('=', '');
+      if (hash == data['senderHash']) return;
+      await Notifications.showNow(id: Notifications.idFor('chat_$id'), activityId: 'chat',
+          title: 'رسالة جديدة', body: 'رسالة جديدة في دردشة النادي');
+      return;
+    }
     final reminderId = Notifications.idFor('activity_$id');
     if (data['operation'] == 'delete') {
       await Notifications.cancel(reminderId);
@@ -52,6 +65,7 @@ class PushNotifications {
       title: updated ? 'تحديث نشاط النادي' : 'نشاط جديد في النادي',
       body: title,
     );
+    if (MemberStore.instance.ready) await CloudSync.syncNow(MemberStore.instance);
     await Notifications.cancel(reminderId);
     if (date != null && date.isAfter(DateTime.now())) {
       await Notifications.scheduleAt(

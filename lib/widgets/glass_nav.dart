@@ -8,7 +8,9 @@ class GlassNavItem {
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  const GlassNavItem({required this.icon, required this.activeIcon, required this.label});
+  final int badge;
+  final bool messenger;
+  const GlassNavItem({required this.icon, required this.activeIcon, required this.label, this.badge = 0, this.messenger = false});
 }
 
 /// شريط تنقّل سفلي عائم زجاجي (Glassmorphism)
@@ -121,12 +123,14 @@ class _NavButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                active ? item.activeIcon : item.icon,
-                size: 21,
-                color: active
-                    ? Colors.white
-                    : (dark ? Colors.white70 : AppColors.muted),
+              Badge(
+                isLabelVisible: item.badge > 0,
+                label: Text(item.badge > 99 ? '99+' : '${item.badge}'),
+                backgroundColor: Colors.red,
+                child: item.messenger
+                    ? CustomPaint(size: const Size(22, 22), painter: _MessengerPainter(active ? Colors.white : (dark ? Colors.white70 : AppColors.muted)))
+                    : Icon(active ? item.activeIcon : item.icon, size: 21,
+                        color: active ? Colors.white : (dark ? Colors.white70 : AppColors.muted)),
               ),
               AnimatedSize(
                 duration: const Duration(milliseconds: 240),
@@ -152,4 +156,21 @@ class _NavButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// فقّاعة مع صاعقة مستوحاة من رمز تطبيقات المراسلة.
+class _MessengerPainter extends CustomPainter {
+  final Color color;
+  _MessengerPainter(this.color);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sx=size.width/24, sy=size.height/24;
+    canvas.save(); canvas.scale(sx, sy);
+    final bubble=Path()..moveTo(12,1)..cubicTo(5.7,1,1,5.6,1,11.4)..cubicTo(1,14.6,2.4,17.3,4.8,19.1)..lineTo(4.8,23)..lineTo(8.6,20.9)..cubicTo(9.7,21.2,10.8,21.4,12,21.4)..cubicTo(18.3,21.4,23,17,23,11.4)..cubicTo(23,5.6,18.3,1,12,1)..close();
+    canvas.drawPath(bubble,Paint()..color=color);
+    final bolt=Path()..moveTo(4.6,14.7)..lineTo(10.3,8.6)..lineTo(13.5,11.7)..lineTo(19.3,8.6)..lineTo(13.7,14.8)..lineTo(10.4,11.7)..close();
+    canvas.drawPath(bolt,Paint()..color=(color==Colors.white ? const Color(0xFF4B1E8C) : Colors.white));
+    canvas.restore();
+  }
+  @override bool shouldRepaint(covariant _MessengerPainter oldDelegate) => oldDelegate.color != color;
 }
