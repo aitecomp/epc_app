@@ -25,7 +25,7 @@ class ChatMemberProfile extends StatelessWidget {
         const SizedBox(height: 24),
         const Text('بطاقة العضوية', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
         const SizedBox(height: 12),
-        MemberCardFlip(member: member, publicView: true),
+        Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: MemberCardFlip(member: member, publicView: true))),
         const SizedBox(height: 8),
         const Text('اضغط على البطاقة لقلبها', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted, fontSize: 12)),
         const SizedBox(height: 24),

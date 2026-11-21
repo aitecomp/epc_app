@@ -385,7 +385,7 @@ class _Front extends StatelessWidget {
     return _CardShell(
       content: LayoutBuilder(
         builder: (context, c) {
-          final s = (c.maxWidth / 310).clamp(0.70, 3.2);
+          final s = (c.maxWidth / 340).clamp(0.55, 3.0);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,7 +395,7 @@ class _Front extends StatelessWidget {
                 children: [
                   _LogoMark(size: 25 * s),
                   SizedBox(width: 7 * s),
-                  Column(
+                  Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -425,8 +425,8 @@ class _Front extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
-                  const Spacer(),
+                  )),
+                  SizedBox(width: 4 * s),
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 7 * s, vertical: 3.2 * s),
                     decoration: BoxDecoration(
@@ -775,7 +775,7 @@ class _Back extends StatelessWidget {
     return _CardShell(
       content: LayoutBuilder(
         builder: (context, c) {
-          final s = (c.maxWidth / 310).clamp(0.70, 3.2);
+          final s = (c.maxWidth / 340).clamp(0.55, 3.0);
           final qrSize = math.min(c.maxHeight * 0.56, c.maxWidth * 0.32);
 
           return Column(
@@ -785,15 +785,17 @@ class _Back extends StatelessWidget {
                 children: [
                   _LogoMark(size: 20 * s),
                   SizedBox(width: 6 * s),
-                  Text(
+                  Expanded(child: Text(
                     'نادي رواد الاقتصاد',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 9.8 * s,
                       fontWeight: FontWeight.w800,
                     ),
-                  ),
-                  const Spacer(),
+                  )),
+                  SizedBox(width: 4 * s),
                   Text(
                     'EPC  ·  ${member.year}',
                     style: TextStyle(
