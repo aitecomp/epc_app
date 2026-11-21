@@ -311,17 +311,16 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.14.1
-          name: EPC App v1.14.1 — نادي رواد الاقتصاد
+          tag_name: v1.15.0
+          name: EPC App v1.15.0 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.14.1 — نسخة متوافقة
+            ### الإصدار 1.15.0 — هوية الشعار وملفات الأعضاء
 
-            تصميم موحد بالذهبي والأبيض، وبطاقات عضوية قابلة للقلب في الملفات العامة للأعضاء.
-            لا تعرض البطاقة العامة بيانات الاتصال أو رقم التسجيل أو رمز التحقق الخاص.
+            ألوان مستوحاة من شعار النادي، مع ملف عضو يعرض البطاقة الكاملة القابلة للقلب ورمز QR ومعلومات العضوية.
 
-            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.14.1/EPC-Club-1.14.1-compatible.apk)
-            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.14.1/EPC-Club-1.14.1-universal.apk)
+            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.15.0/EPC-Club-1.15.0-compatible.apk)
+            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.15.0/EPC-Club-1.15.0-universal.apk)
             - [تطبيق الويب](https://epc-club.pages.dev)
 
           files: |

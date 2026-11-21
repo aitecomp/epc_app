@@ -3,27 +3,27 @@ import 'package:flutter/services.dart';
 
 /// ── هوية نادي رواد الاقتصاد ─────────────────────────────────────────────
 class AppColors {
-  static const ink = Color(0xFF30270F);
-  static const plum = Color(0xFF73530B);
-  static const purple = Color(0xFF80620F);
-  static const violet = Color(0xFFA67D16);
-  static const gold = Color(0xFFC9A227);
-  static const goldSoft = Color(0xFFEBD08A);
-  static const cream = Color(0xFFFFFDF8);
-  static const muted = Color(0xFF776C54);
-  static const line = Color(0xFFEDE5D2);
-  static const softViolet = Color(0xFFFBF5E5);
+  static const ink = Color(0xFF101D30);
+  static const plum = Color(0xFF08172A);
+  static const purple = Color(0xFF132A43);
+  static const violet = Color(0xFF2D4964);
+  static const gold = Color(0xFFB68A49);
+  static const goldSoft = Color(0xFFE7CD98);
+  static const cream = Color(0xFFFAFBFD);
+  static const muted = Color(0xFF667587);
+  static const line = Color(0xFFE4E9ED);
+  static const softViolet = Color(0xFFF1F4F6);
 
   static const headerGradient = LinearGradient(
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
-    colors: [Color(0xFF73530B), Color(0xFF80620F), Color(0xFF8D6B10)],
+    colors: [Color(0xFF08172A), Color(0xFF132A43), Color(0xFF203C55)],
   );
 
   static const goldGradient = LinearGradient(
     begin: Alignment.centerRight,
     end: Alignment.centerLeft,
-    colors: [Color(0xFFE8C86A), Color(0xFFC9A227), Color(0xFFA8801A)],
+    colors: [Color(0xFFF0D59B), Color(0xFFB68A49), Color(0xFFA87832)],
   );
 }
 

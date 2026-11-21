@@ -14,6 +14,7 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback onLogout;
   final bool isLeader;
   final Widget? extraActions;
+  final bool readOnly;
 
   const ProfileScreen({
     super.key,
@@ -21,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
     required this.onLogout,
     this.isLeader = false,
     this.extraActions,
+    this.readOnly = false,
   });
 
   @override
@@ -85,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final m = widget.member;
-    final top = MediaQuery.paddingOf(context).top;
+    final top = widget.readOnly ? 0.0 : MediaQuery.paddingOf(context).top;
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -160,6 +162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 widget.extraActions!,
               ],
+              if (!widget.readOnly) ...[
               const SizedBox(height: 16),
               GhostButton(
                 label: _busy ? 'جارٍ...' : 'تغيير الصورة',
@@ -182,6 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+              ],
             ],
           ),
         ),
@@ -228,7 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             fontWeight: FontWeight.w800)),
                     Text('Economics Pioneers Club',
                         style: TextStyle(
-                            color: Color(0xFFEBD08A), fontSize: 10, letterSpacing: 1.2)),
+                            color: Color(0xFFE7CD98), fontSize: 10, letterSpacing: 1.2)),
                   ],
                 ),
               ),
@@ -255,7 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 22),
-          Text('مرحباً، ${m.fullName}',
+          Text(widget.readOnly ? m.fullName : 'مرحباً، ${m.fullName}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

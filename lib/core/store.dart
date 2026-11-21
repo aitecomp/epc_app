@@ -542,7 +542,7 @@ class MemberStore extends ChangeNotifier {
   /// حزمة المزامنة الكاملة (الأعضاء + المحذوفون)
   Map<String, dynamic> exportPayload() => {
         'members': _members.map((m) => m.toJson()).toList(),
-        if (_leaderProfile != null) 'leaderProfile': {..._leaderProfile!.toJson(), 'password': '', 'phone': '', 'email': ''},
+        if (_leaderProfile != null) 'leaderProfile': {..._leaderProfile!.toJson(), 'password': ''},
         'deleted': _deleted.entries
             .map((e) => {'id': e.key, 'at': e.value.toIso8601String()})
             .toList(),

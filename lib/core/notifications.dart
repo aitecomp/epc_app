@@ -82,7 +82,7 @@ class Notifications {
           enableVibration: true,
           vibrationPattern: Int64List.fromList(const [0, 500, 220, 500]),
           styleInformation: const BigTextStyleInformation(''),
-          color: const Color(0xFF80620F),
+          color: const Color(0xFF132A43),
           ticker: 'نادي رواد الاقتصاد',
         ),
         iOS: const DarwinNotificationDetails(
@@ -110,7 +110,7 @@ class Notifications {
       autoCancel: false,
       additionalFlags: Int32List.fromList(const [4]),
       actions: const [AndroidNotificationAction('stop_alarm', 'إيقاف المنبّه', cancelNotification: true)],
-      color: const Color(0xFF80620F),
+      color: const Color(0xFF132A43),
     ),
     iOS: const DarwinNotificationDetails(presentAlert: true, presentSound: true),
   );

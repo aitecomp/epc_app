@@ -10,17 +10,17 @@ import '../core/theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
 //  بطاقة عضوية نادي رواد الاقتصاد — تصميم مرسوم بالكامل
-//  ألوان: ذهبي + أبيض · خطوط رفيعة · تدرّج ضوئي · شعار النادي
+//  ألوان: كحلي الشعار + ذهبي + أبيض · خطوط رفيعة · تدرّج ضوئي · شعار النادي
 // ══════════════════════════════════════════════════════════════════════════
 
-const Color _kGold = Color(0xFFC9A227);
-const Color _kGoldSoft = Color(0xFFEBD08A);
+const Color _kGold = Color(0xFFB68A49);
+const Color _kGoldSoft = Color(0xFFE7CD98);
 
 /// نمط ألوان داخلي للبطاقة
 class _C {
-  static const deep = Color(0xFF61490D);
-  static const mid = Color(0xFF80620F);
-  static const dark = Color(0xFF523D09);
+  static const deep = Color(0xFF07182B);
+  static const mid = Color(0xFF132A43);
+  static const dark = Color(0xFF061222);
   static const gold = _kGold;
   static const goldSoft = _kGoldSoft;
 }
@@ -117,7 +117,7 @@ class _CardShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF61490D).withValues(alpha: 0.42),
+            color: const Color(0xFF07182B).withValues(alpha: 0.42),
             blurRadius: 26,
             offset: const Offset(0, 14),
           ),
@@ -187,7 +187,7 @@ class _FrostedBand extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // الصورة مغبشة + تلوين ذهبي + تلاشي ناعم للأعلى
+          // الصورة مغبشة + تلوين كحلي + تلاشي ناعم للأعلى
           ShaderMask(
             blendMode: BlendMode.dstIn,
             shaderCallback: (rect) => const LinearGradient(
@@ -217,7 +217,7 @@ class _FrostedBand extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0x99735512), Color(0xCC503A08)],
+                      colors: [Color(0x990B1C30), Color(0xCC071526)],
                       stops: [0.0, 1.0],
                     ),
                   ),
@@ -259,12 +259,12 @@ class _DecorPainter extends CustomPainter {
       glow,
     );
 
-    // هالة ذهبية فاتحة (يسار سفلي)
+    // هالة ذهبية خفيفة (يسار سفلي)
     final glow2 = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFD8B957).withValues(alpha: 0.30),
-          const Color(0xFFD8B957).withValues(alpha: 0.0),
+          const Color(0xFFCFAE70).withValues(alpha: 0.30),
+          const Color(0xFFCFAE70).withValues(alpha: 0.0),
         ],
       ).createShader(
         Rect.fromCircle(

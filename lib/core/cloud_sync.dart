@@ -67,8 +67,16 @@ class CloudSync {
     if (remote == null) return false;
     final changed = await store.applyRemotePayload(remote);
     if (changed) store.notify();
-    if (store.isLeaderSession && remote['leaderProfile'] == null && store.hasCustomLeaderProfile) {
-      await push(store);
+    if (store.isLeaderSession && store.hasCustomLeaderProfile) {
+      final remoteLeader = remote['leaderProfile'];
+      final localLeader = store.leaderMember;
+      // ترقية البيانات المحلية القديمة التي كانت تحجب معلومات الاتصال عند المزامنة.
+      final needsContactMigration = remoteLeader is Map &&
+          remoteLeader['updatedAt'] == localLeader.updatedAt.toIso8601String() &&
+          ((localLeader.phone.isNotEmpty && (remoteLeader['phone'] ?? '') == '') ||
+           (localLeader.email.isNotEmpty && (remoteLeader['email'] ?? '') == ''));
+      if (needsContactMigration) await store.saveLeaderProfile(localLeader);
+      if (remoteLeader == null || needsContactMigration) await push(store);
     }
     await ActivityNotifier.afterSync(store);
     return true;
