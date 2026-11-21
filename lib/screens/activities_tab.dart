@@ -284,6 +284,8 @@ class ActivitiesTab extends StatelessWidget {
 
   Widget _emptyState(BuildContext context) {
     return Container(
+      key: const ValueKey('empty-activities-card'),
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 22),
       decoration: BoxDecoration(
         color: Colors.white,

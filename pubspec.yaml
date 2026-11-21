@@ -1,7 +1,7 @@
 name: epc_app
 description: "EPC — نادي رواد الاقتصاد | Economics Pioneers Club"
 publish_to: 'none'
-version: 1.12.0+16
+version: 1.12.1+17
 
 environment:
   sdk: ^3.5.0

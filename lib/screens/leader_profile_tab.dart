@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../core/cloud_sync.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
@@ -127,21 +126,8 @@ class LeaderProfileTab extends StatelessWidget {
                     _tile(
                       icon: Icons.settings_outlined,
                       title: 'الإعدادات',
-                      subtitle: 'بيانات الدخول، المزامنة والبيانات',
+                      subtitle: 'بيانات الدخول والبيانات العامة',
                       onTap: onOpenSettings,
-                    ),
-                    _tile(
-                      icon: Icons.sync,
-                      title: 'مزامنة الآن',
-                      subtitle: CloudSync.enabled
-                          ? 'تحديث البيانات من السحابة (Cloudflare R2)'
-                          : 'المزامنة غير مهيّأة',
-                      onTap: () async {
-                        final ok = await CloudSync.syncNow(store);
-                        if (!context.mounted) return;
-                        toast(context, ok ? 'تمت المزامنة بنجاح' : 'تعذّرت المزامنة',
-                            error: !ok);
-                      },
                     ),
                     _tile(
                       icon: Icons.logout,
