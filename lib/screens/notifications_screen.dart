@@ -29,7 +29,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         : ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: activities.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) => const SizedBox(height: 8),
           itemBuilder: (context, i) {
             final a = activities[i];
             return Card(child: ListTile(
