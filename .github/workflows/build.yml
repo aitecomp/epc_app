@@ -212,17 +212,17 @@ jobs:
           ( cd out && sha256sum * > SHA256.txt )
           ls -lh out && cat out/SHA256.txt
 
-      - name: Build legacy APK (أندرويد 5/6 — إن أمكن)
+      - name: Build legacy APK (أندرويد 6.0 / API 23)
         continue-on-error: true
         env:
-          ORG_GRADLE_PROJECT_epcMinSdk: '21'
+          ORG_GRADLE_PROJECT_epcMinSdk: '23'
         run: |
           flutter build apk --release \
             --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
             --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
             --dart-define=SYNC_URL="$SYNC_URL" \
             --dart-define=SYNC_KEY="$SYNC_KEY" || exit 0
-          cp build/app/outputs/flutter-apk/app-release.apk "out/EPC-Club-${VER}-legacy-api21.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "out/EPC-Club-${VER}-legacy-api23.apk"
           ( cd out && sha256sum * > SHA256.txt )
           ls -lh out
 
@@ -262,7 +262,7 @@ jobs:
             |---|---|
             | `EPC-Club-1.8.1-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
             | `EPC-Club-1.8.1-universal.apk` | يعمل على كل الأجهزة |
-            | `EPC-Club-1.8.1-legacy-api21.apk` | أندرويد 5 و 6 القديم (إن وُجد) |
+            | `EPC-Club-1.8.1-legacy-api23.apk` | أندرويد 5 و 6 القديم (إن وُجد) |
             | ⛔ `EPC-Club-1.8.1-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
 
             **رابط تنزيل مباشر:** https://epc-sync.salemdopamine.workers.dev/app
