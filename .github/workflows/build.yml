@@ -153,12 +153,6 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - name: Ensure Android SDK 37
-        run: |
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;37.0.0" > /dev/null 2>&1 || \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" || true
-
       - name: Restore release keystore
         run: |
           mkdir -p android/keys
@@ -215,21 +209,23 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7.0
-          name: EPC App v1.7.0 — نادي رواد الاقتصاد
+          tag_name: v1.8.0
+          name: EPC App v1.8.0 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
 
-            **تحميل الأندرويد:**
-            - `epc-arm64.apk` — للهواتف الحديثة، حجم أصغر ✅ **مُستحسن**
-            - `app-release.apk` — نسخة شاملة لكل الأجهزة
-            - `app-release.aab` — لنشر التطبيق على Google Play
+            ### تحميل الأندرويد (اختر ملف APK فقط)
+            - ✅ `EPC-Club-1.8.0-arm64.apk` — للهواتف الحديثة (الأصغر والأسرع)
+            - `EPC-Club-1.8.0-universal.apk` — يعمل على كل الأجهزة (إن لم يعمل الأول)
+            - ⛔ `EPC-Club-1.8.0-playstore.aab` — **ليس للتحميل**، خاص بمتجر Google Play
+
+            **رابط مباشر بديل:** https://epc-sync.salemdopamine.workers.dev/app
 
             **الويب:** https://epc-club.pages.dev — https://aitecomp.github.io/epc_app/
 
-            الحزمة موقّعة بمفتاح إصدار رسمي (v1 + v2 + v3) وجاهزة للتثبيت.
+            البصمة (SHA-256) موجودة في `SHA256.txt` — تأكد أن حجم الملف مطابق قبل التثبيت.
+            إن ظهرت رسالة «الحزمة غير صالحة»: احذف النسخة القديمة أولاً، ثم نزّل الملف مرة أخرى كاملاً.
           files: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/epc-arm64.apk
-            build/app/outputs/bundle/release/app-release.aab
+            out/*.apk
+            out/SHA256.txt
           fail_on_unmatched_files: false

@@ -10,3 +10,4 @@ android/keys/
 android/key.properties
 *.jks
 *.keystore
+test/failures/

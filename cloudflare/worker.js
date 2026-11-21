@@ -31,8 +31,31 @@ export default {
 
     if (path === '/health') return json({ ok: true, service: 'epc-sync' });
 
+    // ── تنزيل تطبيق الأندرويد مباشرة (بدون مفتاح) ──────────────────────
+    if (path === '/app' || path === '/app.apk') {
+      const object = await env.EPC_BUCKET.get('epc-arm64.apk');
+      if (!object) return json({ error: 'apk not uploaded yet' }, 404);
+      const headers = new Headers();
+      headers.set('content-type', 'application/vnd.android.package-archive');
+      headers.set('content-disposition', 'attachment; filename="EPC-Club.apk"');
+      headers.set('cache-control', 'no-store');
+      headers.set('Access-Control-Allow-Origin', '*');
+      if (object.size) headers.set('content-length', String(object.size));
+      return new Response(object.body, { headers });
+    }
+
     if (!env.SYNC_KEY || key !== env.SYNC_KEY) {
       return json({ error: 'unauthorized' }, 401);
+    }
+
+    // ── رفع نسخة التطبيق (من CI فقط، بالمفتاح) ─────────────────────────
+    if (path === '/app' && (request.method === 'PUT' || request.method === 'POST')) {
+      const body = await request.arrayBuffer();
+      if (!body || body.byteLength < 1024) return json({ error: 'apk required' }, 400);
+      await env.EPC_BUCKET.put('epc-arm64.apk', body, {
+        httpMetadata: { contentType: 'application/vnd.android.package-archive' },
+      });
+      return json({ ok: true, size: body.byteLength });
     }
 
     if (path !== '/members' && path !== '/') return json({ error: 'not found' }, 404);
