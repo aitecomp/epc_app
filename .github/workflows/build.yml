@@ -212,6 +212,20 @@ jobs:
           ( cd out && sha256sum * > SHA256.txt )
           ls -lh out && cat out/SHA256.txt
 
+      - name: Build legacy APK (أندرويد 5/6 — إن أمكن)
+        continue-on-error: true
+        env:
+          ORG_GRADLE_PROJECT_epcMinSdk: '21'
+        run: |
+          flutter build apk --release \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY" || exit 0
+          cp build/app/outputs/flutter-apk/app-release.apk "out/EPC-Club-${VER}-legacy-api21.apk"
+          ( cd out && sha256sum * > SHA256.txt )
+          ls -lh out
+
       - name: Mirror APK to R2 (رابط تنزيل مباشر)
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -236,22 +250,31 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.8.0
-          name: EPC App v1.8.0 — نادي رواد الاقتصاد
+          tag_name: v1.8.1
+          name: EPC App v1.8.1 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
+            ### الإصدار 1.8.1 — توافق أوسع للتثبيت
 
-            ### تحميل الأندرويد (اختر ملف APK فقط)
-            - ✅ `EPC-Club-1.8.0-arm64.apk` — للهواتف الحديثة (الأصغر والأسرع)
-            - `EPC-Club-1.8.0-universal.apk` — يعمل على كل الأجهزة (إن لم يعمل الأول)
-            - ⛔ `EPC-Club-1.8.0-playstore.aab` — **ليس للتحميل**، خاص بمتجر Google Play
+            **ملفات APK فقط هي التي تُثبَّت** — لا تُثبّت ملفات `.aab` (متجر Google Play فقط).
 
-            **رابط مباشر بديل:** https://epc-sync.salemdopamine.workers.dev/app
+            | الملف | لمن؟ |
+            |---|---|
+            | `EPC-Club-1.8.1-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
+            | `EPC-Club-1.8.1-universal.apk` | يعمل على كل الأجهزة |
+            | `EPC-Club-1.8.1-legacy-api21.apk` | أندرويد 5 و 6 القديم (إن وُجد) |
+            | ⛔ `EPC-Club-1.8.1-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
 
+            **رابط تنزيل مباشر:** https://epc-sync.salemdopamine.workers.dev/app
             **الويب:** https://epc-club.pages.dev — https://aitecomp.github.io/epc_app/
 
-            البصمة (SHA-256) موجودة في `SHA256.txt` — تأكد أن حجم الملف مطابق قبل التثبيت.
-            إن ظهرت رسالة «الحزمة غير صالحة»: احذف النسخة القديمة أولاً، ثم نزّل الملف مرة أخرى كاملاً.
+            #### إن ظهرت رسالة «الحزمة تبدو غير صالحة»
+            1. نزّل الملف بمتصفح **Chrome** (لا من واتساب/تيليجرام/متصفح مضغوط).
+            2. تأكد أن حجم الملف مطابق تمامًا لما في `SHA256.txt`.
+            3. احذف النسخة القديمة من التطبيق أولًا (اختلاف مفتاح التوقيع يمنع التحديث).
+            4. على سامسونج: الإعدادات ← الأمان والخصوصية ← **Auto Blocker** ← إيقافه.
+            5. على شاومي/ريدمي: الإعدادات ← الخصوصية ← تثبيت من مصادر غير معروفة ← السماح.
+            6. جرّب `EPC-Club-1.8.1-universal.apk` بدل نسخة arm64.
           files: |
             out/*.apk
             out/SHA256.txt
