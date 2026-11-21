@@ -8,6 +8,7 @@ import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/glass_nav.dart';
 import 'activities_tab.dart';
+import 'chat_screen.dart';
 import 'profile_screen.dart';
 
 /// واجهة العضو: الرئيسية (النشاطات) + البروفيل (البطاقة)
@@ -69,8 +70,9 @@ class _MemberShellState extends State<MemberShell> {
             store: widget.store,
             isLeader: false,
             memberName: member.fullName,
-            onOpenProfile: () => setState(() => _index = 1),
+            onOpenProfile: () => setState(() => _index = 2),
           ),
+          ChatScreen(store: widget.store),
           ProfileScreen(member: member, onLogout: widget.onLogout),
         ],
       ),
@@ -82,6 +84,11 @@ class _MemberShellState extends State<MemberShell> {
             icon: Icons.home_outlined,
             activeIcon: Icons.home_rounded,
             label: unseen > 0 ? 'الرئيسية • $unseen' : 'الرئيسية',
+          ),
+          const GlassNavItem(
+            icon: Icons.forum_outlined,
+            activeIcon: Icons.forum_rounded,
+            label: 'الدردشة',
           ),
           const GlassNavItem(
             icon: Icons.person_outline,

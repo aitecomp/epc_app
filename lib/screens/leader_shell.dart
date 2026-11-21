@@ -9,6 +9,7 @@ import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/glass_nav.dart';
 import 'activities_tab.dart';
+import 'chat_screen.dart';
 import 'leader_profile_tab.dart';
 import 'member_detail_screen.dart';
 import 'member_form_screen.dart';
@@ -168,8 +169,9 @@ class _LeaderShellState extends State<LeaderShell> {
         store: store,
         isLeader: true,
         memberName: leader.fullName,
-        onOpenProfile: () => setState(() => _index = 1),
+        onOpenProfile: () => setState(() => _index = 2),
       ),
+      ChatScreen(store: store),
       LeaderProfileTab(
         store: store,
         onEditProfile: () => _openForm(member: store.leaderMember, leaderMode: true),
@@ -196,6 +198,11 @@ class _LeaderShellState extends State<LeaderShell> {
             icon: Icons.home_outlined,
             activeIcon: Icons.home_rounded,
             label: 'الرئيسية',
+          ),
+          GlassNavItem(
+            icon: Icons.forum_outlined,
+            activeIcon: Icons.forum_rounded,
+            label: 'الدردشة',
           ),
           GlassNavItem(
             icon: Icons.person_outline,

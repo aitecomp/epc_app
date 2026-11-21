@@ -11,7 +11,8 @@
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,PUT,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'content-type,x-sync-key',
+  'Access-Control-Allow-Headers': 'content-type,x-sync-key,x-chat-auth,range',
+  'Access-Control-Expose-Headers': 'content-range,accept-ranges,content-length',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -50,6 +51,117 @@ async function sendActivityPush(env, data, validateOnly = false) {
   return await response.json();
 }
 
+const chatIdPattern = /^[a-zA-Z0-9_-]{1,100}$/;
+async function chatActor(request, env) {
+  try {
+    const creds = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(request.headers.get('x-chat-auth') || ''), c => c.charCodeAt(0))));
+    if (typeof creds.reg !== 'string' || typeof creds.password !== 'string' || !creds.reg || !creds.password) return null;
+    if (env.CHAT_LEADER_REG && env.CHAT_LEADER_PASS && creds.reg === atob(env.CHAT_LEADER_REG) && creds.password === atob(env.CHAT_LEADER_PASS)) return {id: creds.reg, name: 'القائد'};
+    const obj = await env.EPC_BUCKET.get('members.json');
+    if (!obj) return null;
+    const data = await obj.json();
+    const member = (data.members || []).find(m => m.regNumber === creds.reg && m.password === creds.password);
+    if (!member) return null;
+    return {id: creds.reg, name: `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'عضو'};
+  } catch (_) { return null; }
+}
+async function chatMac(env, data) {
+  if (!env.CHAT_MEDIA_SECRET) throw new Error('chat media key missing');
+  const key = await crypto.subtle.importKey('raw', enc.encode(env.CHAT_MEDIA_SECRET), {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+  return b64url(await crypto.subtle.sign('HMAC',key,enc.encode(data)));
+}
+async function mediaUrl(env, origin, id) {
+  const expiry = Math.floor(Date.now()/1000)+3600;
+  const sig = await chatMac(env, `${id}:${expiry}`);
+  return `${origin}/chat/media/${encodeURIComponent(id)}?exp=${expiry}&sig=${sig}`;
+}
+async function serveChatMedia(request, env, id, url) {
+  if (!chatIdPattern.test(id)) return json({error:'not found'},404);
+  const exp = Number(url.searchParams.get('exp'));
+  const sig = url.searchParams.get('sig') || '';
+  if (!Number.isSafeInteger(exp) || exp < Math.floor(Date.now()/1000) || exp > Math.floor(Date.now()/1000)+3700 || sig !== await chatMac(env, `${id}:${exp}`)) return json({error:'unauthorized'},401);
+  if (!env.CHAT_MEDIA_SECRET) return json({error:'not configured'},503);
+  const meta = await env.EPC_BUCKET.head(`chat/media/${id}`);
+  if (!meta) return json({error:'not found'},404);
+  const match = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get('range') || '');
+  let start, end;
+  if (match) {
+    start=Number(match[1]); end=match[2] ? Math.min(Number(match[2]), meta.size-1) : meta.size-1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= meta.size)
+      return new Response(null,{status:416,headers:{...CORS,'content-range':`bytes */${meta.size}`}});
+  }
+  const obj = await env.EPC_BUCKET.get(`chat/media/${id}`, match ? {range:{offset:start,length:end-start+1}} : {});
+  if (!obj) return json({error:'not found'},404);
+  const headers = new Headers(CORS);
+  headers.set('content-type', obj.httpMetadata?.contentType || 'application/octet-stream');
+  headers.set('accept-ranges', 'bytes');
+  headers.set('content-length', String(match ? end-start+1 : meta.size));
+  if (match) headers.set('content-range', `bytes ${start}-${end}/${meta.size}`);
+  headers.set('content-disposition', url.searchParams.get('download') === '1' ? 'attachment' : 'inline');
+  headers.set('cache-control','private, no-store');
+  return new Response(obj.body,{headers,status: match ? 206 : 200});
+}
+async function chatHandler(request, env, url) {
+  const actor = await chatActor(request,env);
+  if (!actor) return json({error:'invalid account'},401);
+  const path = url.pathname;
+  if (path === '/chat/media' && request.method === 'POST') {
+    const type = (request.headers.get('content-type') || '').split(';')[0];
+    if (!/^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|audio\/(mp4|mpeg|ogg|wav|webm|x-m4a))$/.test(type)) return json({error:'unsupported media'},415);
+    const length = Number(request.headers.get('content-length') || 0);
+    if (length > 15*1024*1024) return json({error:'file exceeds 15 MB'},413);
+    const bytes = await request.arrayBuffer();
+    if (!bytes.byteLength || bytes.byteLength > 15*1024*1024) return json({error:'file exceeds 15 MB'},413);
+    const id = crypto.randomUUID();
+    await env.EPC_BUCKET.put(`chat/media/${id}`,bytes,{httpMetadata:{contentType:type},customMetadata:{owner:actor.id}});
+    return json({id, type, size:bytes.byteLength});
+  }
+  if (path === '/chat/messages' && request.method === 'POST') {
+    let data; try { data=await request.json(); } catch (_) { return json({error:'invalid json'},400); }
+    const text = typeof data.text === 'string' ? data.text.trim().slice(0,4000) : '';
+    const media = typeof data.media === 'string' && chatIdPattern.test(data.media) ? data.media : '';
+    if (!text && !media) return json({error:'empty message'},400);
+    let mediaType = '';
+    if (media) { const obj=await env.EPC_BUCKET.head(`chat/media/${media}`); if (!obj || obj.customMetadata?.owner !== actor.id) return json({error:'invalid media'},400); mediaType=obj.httpMetadata?.contentType || ''; }
+    const id = `${Date.now().toString().padStart(13,'0')}_${crypto.randomUUID()}`;
+    const message = {id, authorId:actor.id, authorName:actor.name, text, media, mediaType,
+      replyId:typeof data.replyId === 'string' && chatIdPattern.test(data.replyId) ? data.replyId : '',
+      replyText:typeof data.replyText === 'string' ? data.replyText.slice(0,200) : '',
+      replyName:typeof data.replyName === 'string' ? data.replyName.slice(0,100) : '',
+      createdAt:new Date().toISOString()};
+    await env.EPC_BUCKET.put(`chat/messages/${id}`,JSON.stringify(message),{httpMetadata:{contentType:'application/json'}});
+    return json({ok:true,id});
+  }
+  if (path === '/chat/react' && request.method === 'POST') {
+    let data; try { data=await request.json(); } catch (_) { return json({error:'invalid json'},400); }
+    if (!chatIdPattern.test(data.id || '') || !['','❤️','👍','😂','🎉','😮'].includes(data.emoji)) return json({error:'invalid reaction'},400);
+    if (!await env.EPC_BUCKET.head(`chat/messages/${data.id}`)) return json({error:'not found'},404);
+    const hash=b64url(await crypto.subtle.digest('SHA-256',enc.encode(actor.id)));
+    const key=`chat/reactions/${data.id}/${hash}`;
+    if (!data.emoji) await env.EPC_BUCKET.delete(key);
+    else await env.EPC_BUCKET.put(key,JSON.stringify({emoji:data.emoji,authorId:actor.id}));
+    return json({ok:true});
+  }
+  if (path === '/chat/messages' && request.method === 'GET') {
+    let cursor, keys=[];
+    do {
+      const page=await env.EPC_BUCKET.list({prefix:'chat/messages/',limit:1000,cursor});
+      keys.push(...page.objects.map(o=>o.key)); cursor=page.truncated ? page.cursor : undefined;
+    } while (cursor && keys.length < 10000);
+    keys=keys.slice(-60);
+    const messages=await Promise.all(keys.map(async key => {
+      const obj=await env.EPC_BUCKET.get(key); if (!obj) return null;
+      const msg=await obj.json();
+      if (msg.media) msg.mediaUrl=await mediaUrl(env,url.origin,msg.media);
+      const reactions=await env.EPC_BUCKET.list({prefix:`chat/reactions/${msg.id}/`,limit:1000});
+      msg.reactions=(await Promise.all(reactions.objects.map(async r=>{const ro=await env.EPC_BUCKET.get(r.key);return ro ? await ro.json() : null;}))).filter(Boolean);
+      return msg;
+    }));
+    return json({messages:messages.filter(Boolean),me:actor.id});
+  }
+  return json({error:'not found'},404);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -74,9 +186,13 @@ export default {
       return new Response(object.body, { headers });
     }
 
+    if (path.startsWith('/chat/media/') && request.method === 'GET') return serveChatMedia(request, env, path.slice('/chat/media/'.length), url);
+
     if (!env.SYNC_KEY || key !== env.SYNC_KEY) {
       return json({ error: 'unauthorized' }, 401);
     }
+
+    if (path.startsWith('/chat/')) return chatHandler(request, env, url);
 
     if (path === '/notify' && request.method === 'POST') {
       let input;

@@ -102,7 +102,7 @@ class _NavButton extends StatelessWidget {
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.symmetric(
-            horizontal: active ? 16 : 10,
+            horizontal: active ? 8 : 6,
             vertical: 8,
           ),
           decoration: BoxDecoration(
@@ -138,7 +138,7 @@ class _NavButton extends StatelessWidget {
                           item.label,
                           maxLines: 1,
                           style: const TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
