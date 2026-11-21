@@ -196,9 +196,9 @@ class _ChatScreenState extends State<ChatScreen> {
       constraints: BoxConstraints(maxWidth: maxBubble),
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
       decoration: BoxDecoration(
-        color: own ? const Color(0xFFF1EAFE) : Colors.white,
+        color: own ? const Color(0xFFFFF8E8) : Colors.white,
         borderRadius: BorderRadius.only(topLeft: const Radius.circular(18), topRight: const Radius.circular(18), bottomLeft: Radius.circular(own ? 6 : 18), bottomRight: Radius.circular(own ? 18 : 6)),
-        border: Border.all(color: own ? const Color(0xFFE6D9F7) : const Color(0xFFECE8EF)),
+        border: Border.all(color: own ? const Color(0xFFEADCB9) : const Color(0xFFF0EADB)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         if (!own) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(m['authorName'] as String? ?? 'عضو', style: const TextStyle(color: AppColors.purple, fontWeight: FontWeight.w700, fontSize: 11))),
@@ -300,7 +300,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
   @override Widget build(BuildContext context) => SizedBox(width: 260, height: 160, child: InkWell(
     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _VideoScreen(url: widget.url))),
     child: Stack(fit: StackFit.expand, alignment: Alignment.center, children: [
-      Container(color: const Color(0xFF221836)),
+      Container(color: const Color(0xFF403311)),
       FutureBuilder<void>(future: loading, builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done || snapshot.hasError) return const SizedBox.shrink();
         return FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge, child: SizedBox(width: video.value.size.width, height: video.value.size.height, child: VideoPlayer(video)));

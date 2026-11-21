@@ -14,12 +14,19 @@ void main() {
     );
     await tester.pumpWidget(MaterialApp(home: ChatMemberProfile(member: member)));
     await tester.pump();
-    expect(find.text('سالم أحمد'), findsOneWidget);
+    expect(find.text('سالم أحمد'), findsWidgets);
+    expect(find.byType(MemberCardFlip), findsOneWidget);
     expect(find.byType(MemberAvatar), findsOneWidget);
-    expect(find.text('إدارة أعمال'), findsOneWidget);
+    expect(find.text('إدارة أعمال'), findsWidgets);
     expect(find.text('secret-phone'), findsNothing);
     expect(find.text('secret-email'), findsNothing);
     expect(find.text('secret-pass'), findsNothing);
     expect(find.text('secret-reg'), findsNothing);
+    await tester.tap(find.byType(MemberCardFlip));
+    await tester.pumpAndSettle();
+    expect(find.text('secret-reg'), findsNothing);
+    expect(find.text('secret-phone'), findsNothing);
+    expect(find.byType(QrBlock), findsNothing);
+    expect(find.text('بطاقة العضوية'), findsWidgets);
   });
 }

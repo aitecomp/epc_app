@@ -52,7 +52,7 @@ class GlassNavBar extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
               decoration: BoxDecoration(
-                color: (dark ? const Color(0xFF1B0A2E) : Colors.white)
+                color: (dark ? const Color(0xFF61490D) : Colors.white)
                     .withValues(alpha: dark ? 0.72 : 0.62),
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
@@ -169,7 +169,7 @@ class _MessengerPainter extends CustomPainter {
     final bubble=Path()..moveTo(12,1)..cubicTo(5.7,1,1,5.6,1,11.4)..cubicTo(1,14.6,2.4,17.3,4.8,19.1)..lineTo(4.8,23)..lineTo(8.6,20.9)..cubicTo(9.7,21.2,10.8,21.4,12,21.4)..cubicTo(18.3,21.4,23,17,23,11.4)..cubicTo(23,5.6,18.3,1,12,1)..close();
     canvas.drawPath(bubble,Paint()..color=color);
     final bolt=Path()..moveTo(4.6,14.7)..lineTo(10.3,8.6)..lineTo(13.5,11.7)..lineTo(19.3,8.6)..lineTo(13.7,14.8)..lineTo(10.4,11.7)..close();
-    canvas.drawPath(bolt,Paint()..color=(color==Colors.white ? const Color(0xFF4B1E8C) : Colors.white));
+    canvas.drawPath(bolt,Paint()..color=(color==Colors.white ? const Color(0xFF80620F) : Colors.white));
     canvas.restore();
   }
   @override bool shouldRepaint(covariant _MessengerPainter oldDelegate) => oldDelegate.color != color;

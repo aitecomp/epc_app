@@ -10,7 +10,7 @@ import '../core/theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
 //  بطاقة عضوية نادي رواد الاقتصاد — تصميم مرسوم بالكامل
-//  ألوان: بنفسجي عميق + ذهبي · خطوط رفيعة · تدرّج ضوئي · شعار النادي
+//  ألوان: ذهبي + أبيض · خطوط رفيعة · تدرّج ضوئي · شعار النادي
 // ══════════════════════════════════════════════════════════════════════════
 
 const Color _kGold = Color(0xFFC9A227);
@@ -18,9 +18,9 @@ const Color _kGoldSoft = Color(0xFFEBD08A);
 
 /// نمط ألوان داخلي للبطاقة
 class _C {
-  static const deep = Color(0xFF1B0A2E);
-  static const mid = Color(0xFF3F1273);
-  static const dark = Color(0xFF120620);
+  static const deep = Color(0xFF61490D);
+  static const mid = Color(0xFF80620F);
+  static const dark = Color(0xFF523D09);
   static const gold = _kGold;
   static const goldSoft = _kGoldSoft;
 }
@@ -29,11 +29,13 @@ class _C {
 class MemberCardFlip extends StatefulWidget {
   final Member member;
   final bool initiallyFlipped;
+  final bool publicView;
 
   const MemberCardFlip({
     super.key,
     required this.member,
     this.initiallyFlipped = false,
+    this.publicView = false,
   });
 
   @override
@@ -91,7 +93,7 @@ class _MemberCardFlipState extends State<MemberCardFlip>
                 ..setEntry(3, 2, 0.0016)
                 ..scaleByDouble(depth, depth, 1, 1)
                 ..rotateY(angle),
-              child: showBack ? _Back(member: widget.member) : _Front(member: widget.member),
+              child: showBack ? _Back(member: widget.member, publicView: widget.publicView) : _Front(member: widget.member, publicView: widget.publicView),
             );
           },
         ),
@@ -115,7 +117,7 @@ class _CardShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1B0A2E).withValues(alpha: 0.42),
+            color: const Color(0xFF61490D).withValues(alpha: 0.42),
             blurRadius: 26,
             offset: const Offset(0, 14),
           ),
@@ -185,7 +187,7 @@ class _FrostedBand extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // الصورة مغبشة + تلوين بنفسجي + تلاشي ناعم للأعلى
+          // الصورة مغبشة + تلوين ذهبي + تلاشي ناعم للأعلى
           ShaderMask(
             blendMode: BlendMode.dstIn,
             shaderCallback: (rect) => const LinearGradient(
@@ -215,7 +217,7 @@ class _FrostedBand extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0x992B0B4D), Color(0xCC150722)],
+                      colors: [Color(0x99735512), Color(0xCC503A08)],
                       stops: [0.0, 1.0],
                     ),
                   ),
@@ -257,12 +259,12 @@ class _DecorPainter extends CustomPainter {
       glow,
     );
 
-    // هالة بنفسجية فاتحة (يسار سفلي)
+    // هالة ذهبية فاتحة (يسار سفلي)
     final glow2 = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFF8B4BF0).withValues(alpha: 0.30),
-          const Color(0xFF8B4BF0).withValues(alpha: 0.0),
+          const Color(0xFFD8B957).withValues(alpha: 0.30),
+          const Color(0xFFD8B957).withValues(alpha: 0.0),
         ],
       ).createShader(
         Rect.fromCircle(
@@ -375,7 +377,8 @@ class _Rule extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════
 class _Front extends StatelessWidget {
   final Member member;
-  const _Front({required this.member});
+  final bool publicView;
+  const _Front({required this.member, required this.publicView});
 
   @override
   Widget build(BuildContext context) {
@@ -495,7 +498,7 @@ class _Front extends StatelessWidget {
                               ),
                               SizedBox(width: 5 * s),
                               Text(
-                                'رقم التسجيل',
+                                publicView ? 'الصفة' : 'رقم التسجيل',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.48),
                                   fontSize: 7 * s,
@@ -504,7 +507,7 @@ class _Front extends StatelessWidget {
                               ),
                               SizedBox(width: 5 * s),
                               Text(
-                                member.regNumber,
+                                publicView ? member.role : member.regNumber,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 11.2 * s,
@@ -556,7 +559,7 @@ class _Front extends StatelessWidget {
                                   maxLines: 1,
                                 ),
                               ),
-                              if (member.phone.isNotEmpty) ...[
+                              if (!publicView && member.phone.isNotEmpty) ...[
                                 _VLine(s: s),
                                 Expanded(
                                   flex: 4,
@@ -764,7 +767,8 @@ class _Photo extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════
 class _Back extends StatelessWidget {
   final Member member;
-  const _Back({required this.member});
+  final bool publicView;
+  const _Back({required this.member, required this.publicView});
 
   @override
   Widget build(BuildContext context) {
@@ -823,11 +827,13 @@ class _Back extends StatelessWidget {
                               width: 0.9,
                             ),
                           ),
-                          child: QrBlock(member: member),
+                          child: publicView
+                              ? Icon(Icons.badge_outlined, color: _C.mid, size: qrSize * 0.5)
+                              : QrBlock(member: member),
                         ),
                         SizedBox(height: 4 * s),
                         Text(
-                          'امسح للتحقق',
+                          publicView ? 'بطاقة العضوية' : 'امسح للتحقق',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.45),
                             fontSize: 5.6 * s,
@@ -854,7 +860,7 @@ class _Back extends StatelessWidget {
                           ),
                           SizedBox(height: 1.5 * s),
                           Text(
-                            member.regNumber,
+                            publicView ? member.role : member.regNumber,
                             style: TextStyle(
                               color: _C.goldSoft,
                               fontSize: 10 * s,
@@ -866,9 +872,9 @@ class _Back extends StatelessWidget {
                           _InfoLine(label: 'التخصص', value: member.displaySpecialization, s: s),
                           _InfoLine(label: 'المستوى', value: member.level, s: s),
                           _InfoLine(label: 'الصفة', value: member.role, s: s),
-                          if (member.phone.isNotEmpty)
+                          if (!publicView && member.phone.isNotEmpty)
                             _InfoLine(label: 'الهاتف', value: member.phone, s: s),
-                          if (member.email.isNotEmpty)
+                          if (!publicView && member.email.isNotEmpty)
                             _InfoLine(label: 'البريد', value: member.email, s: s),
                         ],
                       ),
@@ -890,7 +896,7 @@ class _Back extends StatelessWidget {
                 flex: 4,
                 child: SizedBox(
                   height: 12 * bs,
-                  child: CustomPaint(painter: _BarcodePainter(member.regNumber)),
+                  child: CustomPaint(painter: _BarcodePainter(publicView ? 'EPC' : member.regNumber)),
                 ),
               ),
               SizedBox(width: 12 * bs),

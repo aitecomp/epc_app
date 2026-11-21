@@ -3,21 +3,21 @@ import 'package:flutter/services.dart';
 
 /// ── هوية نادي رواد الاقتصاد ─────────────────────────────────────────────
 class AppColors {
-  static const ink = Color(0xFF170B26);
-  static const plum = Color(0xFF2A0A4E);
-  static const purple = Color(0xFF4B1E8C);
-  static const violet = Color(0xFF7B3FE4);
+  static const ink = Color(0xFF30270F);
+  static const plum = Color(0xFF73530B);
+  static const purple = Color(0xFF80620F);
+  static const violet = Color(0xFFA67D16);
   static const gold = Color(0xFFC9A227);
   static const goldSoft = Color(0xFFEBD08A);
-  static const cream = Color(0xFFFBF8F4);
-  static const muted = Color(0xFF6F6280);
-  static const line = Color(0xFFEDE4F7);
-  static const softViolet = Color(0xFFF4EEFD);
+  static const cream = Color(0xFFFFFDF8);
+  static const muted = Color(0xFF776C54);
+  static const line = Color(0xFFEDE5D2);
+  static const softViolet = Color(0xFFFBF5E5);
 
   static const headerGradient = LinearGradient(
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
-    colors: [Color(0xFF2A0A4E), Color(0xFF4B1E8C), Color(0xFF6D28D9)],
+    colors: [Color(0xFF73530B), Color(0xFF80620F), Color(0xFF8D6B10)],
   );
 
   static const goldGradient = LinearGradient(
