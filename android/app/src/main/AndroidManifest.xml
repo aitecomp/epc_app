@@ -13,7 +13,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
-            android:name=".MainActivity"
+            android:name="dz.epc.epc_app.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

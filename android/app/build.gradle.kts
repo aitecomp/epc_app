@@ -25,9 +25,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dz.epc.epc_app"
-        // نسخة بمعرّف مختلف (تثبيت بجانب النسخة القديمة) عند الحاجة
-        applicationIdSuffix = (project.findProperty("epcIdSuffix") as String?) ?: ""
+        // يطابق تطبيق Android المسجّل في مشروع Firebase.
+        applicationId = "com.club.app"
         // يمكن بناء نسخة "legacy" لدعم أندرويد 5/6 عبر ORG_GRADLE_PROJECT_epcMinSdk=21
         minSdk = (project.findProperty("epcMinSdk") as String?)?.toInt() ?: maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion

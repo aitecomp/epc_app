@@ -44,9 +44,11 @@ class ActivitiesTab extends StatelessWidget {
     if (activity == null) {
       await store.markActivityNotified(saved.id);
     }
-    CloudSync.pushInBackground(store);
+    final synced = await CloudSync.push(store);
     if (context.mounted) {
-      toast(context, activity == null ? 'تم نشر النشاط وإشعار الأعضاء' : 'تم تحديث النشاط');
+      toast(context, synced
+          ? (activity == null ? 'تم حفظ النشاط ومزامنته' : 'تم تحديث النشاط ومزامنته')
+          : 'حُفظ النشاط على هذا الجهاز، تعذّرت المزامنة');
     }
   }
 
