@@ -81,6 +81,24 @@ jobs:
             -d '{"enabled":true}' -o /dev/null -w "subdomain: %{http_code}\n"
           head -c 300 /tmp/worker-out.json
 
+      - name: Verify deployed chat account access
+        env:
+          TEST_URL: ${{ secrets.SYNC_URL }}
+          TEST_KEY: ${{ secrets.SYNC_KEY }}
+          TEST_REG_B64: ${{ secrets.LEADER_REG_B64 }}
+          TEST_PASS_B64: ${{ secrets.LEADER_PASS_B64 }}
+        run: |
+          python3 - <<'PY'
+          import os, json, base64, urllib.request
+          cred = {"reg": base64.b64decode(os.environ['TEST_REG_B64']).decode(), "password": base64.b64decode(os.environ['TEST_PASS_B64']).decode()}
+          headers = {"x-sync-key": os.environ['TEST_KEY'], "x-chat-auth": base64.b64encode(json.dumps(cred).encode()).decode()}
+          req = urllib.request.Request(os.environ['TEST_URL'].rstrip('/') + '/chat/messages', headers=headers)
+          with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.load(response)
+            assert response.status == 200 and isinstance(data.get('messages'), list)
+          print('Deployed chat access verified')
+          PY
+
       - name: Validate push delivery configuration without sending
         env:
           SYNC_KEY_VALUE: ${{ secrets.SYNC_KEY }}

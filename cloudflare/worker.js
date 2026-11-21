@@ -71,7 +71,7 @@ async function chatMac(env, data) {
   return b64url(await crypto.subtle.sign('HMAC',key,enc.encode(data)));
 }
 async function mediaUrl(env, origin, id) {
-  const expiry = Math.floor(Date.now()/1000)+3600;
+  const expiry = (Math.floor(Date.now()/1800000)+1)*1800;
   const sig = await chatMac(env, `${id}:${expiry}`);
   return `${origin}/chat/media/${encodeURIComponent(id)}?exp=${expiry}&sig=${sig}`;
 }
