@@ -23,6 +23,35 @@
           "other_platform_oauth_client": []
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:799629236259:android:94ab9dfc57451c8a5bf996",
+        "android_client_info": {
+          "package_name": "dz.epc.epc_app.alt"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "799629236259-k52icnja4rr0a4d3kj3abic2p57dube2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJ2C2iJZfFzdAQPtcG2A5e9Ye3E9Q0TSk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "799629236259-k52icnja4rr0a4d3kj3abic2p57dube2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

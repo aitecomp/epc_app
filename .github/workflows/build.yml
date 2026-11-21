@@ -270,6 +270,23 @@ jobs:
           ( cd out && sha256sum * > SHA256.txt )
           ls -lh out && cat out/SHA256.txt
 
+      - name: Build alternate package for existing 1.8.1 installations
+        env:
+          ORG_GRADLE_PROJECT_epcApplicationId: dz.epc.epc_app.alt
+        run: |
+          set -e
+          flutter build apk --release \
+            --dart-define=LEADER_REG_B64="$LEADER_REG_B64" \
+            --dart-define=LEADER_PASS_B64="$LEADER_PASS_B64" \
+            --dart-define=SYNC_URL="$SYNC_URL" \
+            --dart-define=SYNC_KEY="$SYNC_KEY"
+          APK="out/EPC-Club-${VER}-compatible.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$APK"
+          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/aapt" dump badging "$APK" | grep "package: name='dz.epc.epc_app.alt'"
+          ( cd out && sha256sum ./*.apk ./*.aab > SHA256.txt )
+
       - name: Mirror APK to R2 (رابط تنزيل مباشر)
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -294,16 +311,17 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.14.0
-          name: EPC App v1.14.0 — نادي رواد الاقتصاد
+          tag_name: v1.14.1
+          name: EPC App v1.14.1 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.14.0 — هوية ذهبية وبيضاء
+            ### الإصدار 1.14.1 — نسخة متوافقة
 
             تصميم موحد بالذهبي والأبيض، وبطاقات عضوية قابلة للقلب في الملفات العامة للأعضاء.
             لا تعرض البطاقة العامة بيانات الاتصال أو رقم التسجيل أو رمز التحقق الخاص.
 
-            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.14.0/EPC-Club-1.14.0-universal.apk)
+            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.14.1/EPC-Club-1.14.1-compatible.apk)
+            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.14.1/EPC-Club-1.14.1-universal.apk)
             - [تطبيق الويب](https://epc-club.pages.dev)
 
           files: |
