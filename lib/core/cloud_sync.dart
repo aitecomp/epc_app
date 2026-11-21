@@ -67,6 +67,9 @@ class CloudSync {
     if (remote == null) return false;
     final changed = await store.applyRemotePayload(remote);
     if (changed) store.notify();
+    if (store.isLeaderSession && remote['leaderProfile'] == null && store.hasCustomLeaderProfile) {
+      await push(store);
+    }
     await ActivityNotifier.afterSync(store);
     return true;
   }

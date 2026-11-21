@@ -542,6 +542,7 @@ class MemberStore extends ChangeNotifier {
   /// حزمة المزامنة الكاملة (الأعضاء + المحذوفون)
   Map<String, dynamic> exportPayload() => {
         'members': _members.map((m) => m.toJson()).toList(),
+        if (_leaderProfile != null) 'leaderProfile': {..._leaderProfile!.toJson(), 'password': '', 'phone': '', 'email': ''},
         'deleted': _deleted.entries
             .map((e) => {'id': e.key, 'at': e.value.toIso8601String()})
             .toList(),
@@ -597,6 +598,16 @@ class MemberStore extends ChangeNotifier {
           _members[index] = incoming;
           changed = true;
         }
+      }
+    }
+
+    final leaderData = payload['leaderProfile'];
+    if (leaderData is Map) {
+      final incomingLeader = Member.fromJson(Map<String, dynamic>.from(leaderData));
+      if (_leaderProfile == null || incomingLeader.updatedAt.isAfter(_leaderProfile!.updatedAt)) {
+        _leaderProfile = incomingLeader;
+        await _prefs?.setString(_kLeaderProfile, jsonEncode(incomingLeader.toJson()));
+        changed = true;
       }
     }
 
@@ -782,6 +793,8 @@ class MemberStore extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  bool get hasCustomLeaderProfile => _leaderProfile != null;
 
   /// بطاقة القائد (تُعرض في تبويب البروفيل)
   Member get leaderMember {

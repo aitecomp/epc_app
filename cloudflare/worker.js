@@ -10,7 +10,7 @@
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,PUT,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
   'Access-Control-Allow-Headers': 'content-type,x-sync-key,x-chat-auth,range',
   'Access-Control-Expose-Headers': 'content-range,accept-ranges,content-length',
   'Access-Control-Max-Age': '86400',
@@ -56,7 +56,11 @@ async function chatActor(request, env) {
   try {
     const creds = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(request.headers.get('x-chat-auth') || ''), c => c.charCodeAt(0))));
     if (typeof creds.reg !== 'string' || typeof creds.password !== 'string' || !creds.reg || !creds.password) return null;
-    if (env.CHAT_LEADER_REG && env.CHAT_LEADER_PASS && creds.reg === atob(env.CHAT_LEADER_REG) && creds.password === atob(env.CHAT_LEADER_PASS)) return {id: creds.reg, name: 'القائد'};
+    if (env.CHAT_LEADER_REG && env.CHAT_LEADER_PASS && creds.reg === atob(env.CHAT_LEADER_REG) && creds.password === atob(env.CHAT_LEADER_PASS)) {
+      const obj=await env.EPC_BUCKET.get('members.json');
+      const leader=obj ? (await obj.json()).leaderProfile : null;
+      return {id:creds.reg, name:leader ? `${leader.firstName || ''} ${leader.lastName || ''}`.trim() || 'القائد' : 'القائد'};
+    }
     const obj = await env.EPC_BUCKET.get('members.json');
     if (!obj) return null;
     const data = await obj.json();
@@ -136,6 +140,25 @@ async function chatHandler(request, env, url, ctx) {
     }
     return json({ok:true,id});
   }
+  if (path.startsWith('/chat/messages/') && request.method === 'DELETE') {
+    const id=path.slice('/chat/messages/'.length);
+    if (!chatIdPattern.test(id)) return json({error:'invalid message'},400);
+    const object=await env.EPC_BUCKET.get(`chat/messages/${id}`);
+    if (!object) return json({ok:true});
+    const message=await object.json();
+    if (message.authorId !== actor.id) return json({error:'only author can delete'},403);
+    await env.EPC_BUCKET.delete(`chat/messages/${id}`);
+    if (typeof message.media === 'string' && chatIdPattern.test(message.media)) {
+      await env.EPC_BUCKET.delete(`chat/media/${message.media}`);
+    }
+    let cursor;
+    do {
+      const reactions=await env.EPC_BUCKET.list({prefix:`chat/reactions/${id}/`,limit:1000,cursor});
+      if (reactions.objects.length) await Promise.all(reactions.objects.map(r=>env.EPC_BUCKET.delete(r.key)));
+      cursor=reactions.truncated ? reactions.cursor : undefined;
+    } while (cursor);
+    return json({ok:true});
+  }
   if (path === '/chat/react' && request.method === 'POST') {
     let data; try { data=await request.json(); } catch (_) { return json({error:'invalid json'},400); }
     if (!chatIdPattern.test(data.id || '') || !['','❤️','👍','😂','🎉','😮'].includes(data.emoji)) return json({error:'invalid reaction'},400);
@@ -156,6 +179,7 @@ async function chatHandler(request, env, url, ctx) {
     const messages=await Promise.all(keys.map(async key => {
       const obj=await env.EPC_BUCKET.get(key); if (!obj) return null;
       const msg=await obj.json();
+      if (msg.replyId && !await env.EPC_BUCKET.head(`chat/messages/${msg.replyId}`)) { msg.replyId=''; msg.replyText=''; msg.replyName=''; }
       if (msg.media) msg.mediaUrl=await mediaUrl(env,url.origin,msg.media);
       const reactions=await env.EPC_BUCKET.list({prefix:`chat/reactions/${msg.id}/`,limit:1000});
       msg.reactions=(await Promise.all(reactions.objects.map(async r=>{const ro=await env.EPC_BUCKET.get(r.key);return ro ? await ro.json() : null;}))).filter(Boolean);
@@ -186,6 +210,7 @@ function mergeSnapshots(oldData, incoming) {
   };
   return {...oldData,...incoming,
     members:keep(byId(oldData.members,incoming.members,'updatedAt'),deleted),deleted,
+    leaderProfile: incoming.leaderProfile && (!oldData.leaderProfile || date(incoming.leaderProfile.updatedAt) > date(oldData.leaderProfile.updatedAt)) ? incoming.leaderProfile : (oldData.leaderProfile || null),
     activities:keep(byId(oldData.activities,incoming.activities,'updatedAt'),deletedActivities),deletedActivities,
     version:(Number(oldData.version)||0)+1,updatedAt:new Date().toISOString()};
 }

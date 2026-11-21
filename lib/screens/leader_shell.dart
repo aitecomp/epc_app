@@ -61,7 +61,7 @@ class _LeaderShellState extends State<LeaderShell> {
     );
     if (saved == true && mounted) {
       setState(() {});
-      if (!leaderMode) CloudSync.pushInBackground(store);
+      CloudSync.pushInBackground(store);
       toast(
         context,
         leaderMode

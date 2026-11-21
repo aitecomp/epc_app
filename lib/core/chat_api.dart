@@ -35,6 +35,9 @@ class ChatApi {
       'replyName': reply?['authorName'] ?? '', 'replyText': reply?['text'] ?? '',
     })).timeout(const Duration(seconds: 25)));
   }
+  Future<void> deleteMessage(String id) async {
+    _result(await http.delete(_uri('/chat/messages/${Uri.encodeComponent(id)}'), headers: _headers).timeout(const Duration(seconds: 25)));
+  }
   Future<void> react(String id, String emoji) async {
     _result(await http.post(_uri('/chat/react'), headers: {..._headers, 'content-type': 'application/json'}, body: jsonEncode({'id': id, 'emoji': emoji})).timeout(const Duration(seconds: 25)));
   }

@@ -14,6 +14,8 @@ import '../core/chat_api.dart';
 import '../core/chat_unread.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
+import '../widgets/member_card.dart';
+import 'chat_member_profile.dart';
 
 class ChatScreen extends StatefulWidget {
   final MemberStore store;
@@ -111,13 +113,52 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) { if (mounted) setState(() { recording = false; sending = false; }); fail(e); }
   }
+  Future<void> _react(Map<String, dynamic> m, String emoji) async {
+    try { await api.react(m['id'] as String, emoji); await refresh(); }
+    catch (e) { fail(e); }
+  }
+  Future<void> _deleteMessage(Map<String, dynamic> m) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('حذف الرسالة؟'),
+      content: const Text('ستختفي الرسالة من المحادثة لدى الجميع.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('حذف', style: TextStyle(color: Colors.red)))],
+    ));
+    if (confirmed != true) return;
+    try {
+      await api.deleteMessage(m['id'] as String);
+      if (mounted) setState(() { messages.removeWhere((item) => item['id'] == m['id']); if (reply?['id'] == m['id']) reply = null; });
+      await refresh();
+    } catch (e) { fail(e); }
+  }
   Future<void> chooseReaction(Map<String, dynamic> m) async {
-    final emoji = await showModalBottomSheet<String>(context: context, builder: (context) => SafeArea(child: Wrap(children: [
-      for (final e in ['❤️', '👍', '😂', '🎉', '😮', 'إزالة'])
-        TextButton(onPressed: () => Navigator.pop(context, e == 'إزالة' ? '' : e), child: Text(e, style: const TextStyle(fontSize: 24))),
-      TextButton(onPressed: () { Navigator.pop(context); setState(() => reply = m); }, child: const Text('رد')),
-    ])));
-    if (emoji != null) { try { await api.react(m['id'] as String, emoji); await refresh(); } catch (e) { fail(e); } }
+    final own = m['authorId'] == widget.store.sessionReg;
+    final action = await showModalBottomSheet<String>(context: context, showDragHandle: true,
+      backgroundColor: Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (sheetContext) => SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('التفاعل مع الرسالة', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [for (final e in ['❤️','👍','😂','🎉','😮'])
+          InkResponse(onTap: () => Navigator.pop(sheetContext, 'reaction:$e'), radius: 26, child: Padding(padding: const EdgeInsets.all(8), child: Text(e, style: const TextStyle(fontSize: 25))))]),
+        const Divider(height: 18),
+        ListTile(leading: const Icon(Icons.reply_rounded, color: AppColors.purple), title: const Text('الرد على الرسالة'), onTap: () => Navigator.pop(sheetContext, 'reply')),
+        ListTile(leading: const Icon(Icons.heart_broken_outlined, color: AppColors.muted), title: const Text('إزالة تفاعلي'), onTap: () => Navigator.pop(sheetContext, 'remove')),
+        if (own) ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFB91C1C)), title: const Text('حذف الرسالة', style: TextStyle(color: Color(0xFFB91C1C))), onTap: () => Navigator.pop(sheetContext, 'delete')),
+      ]))));
+    if (!mounted || action == null) return;
+    if (action == 'reply') { setState(() => reply = m); return; }
+    if (action == 'delete') { await _deleteMessage(m); return; }
+    await _react(m, action == 'remove' ? '' : action.substring('reaction:'.length));
+  }
+  Member? _memberFor(String? reg) {
+    if (reg == null) return null;
+    if (reg == widget.store.leaderReg) return widget.store.leaderMember;
+    for (final member in widget.store.members) { if (member.regNumber == reg) return member; }
+    return null;
+  }
+  void _openMember(Member? member) {
+    if (member == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ملف العضو غير متاح حالياً'))); return; }
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatMemberProfile(member: member)));
   }
   Future<void> saveMedia(String url) async {
     final uri = Uri.parse('$url&download=1');
@@ -136,28 +177,137 @@ class _ChatScreenState extends State<ChatScreen> {
         PopupMenuButton<String>(tooltip: 'إرفاق', onSelected: (v) => attach(v == 'video'), itemBuilder: (_) => const [PopupMenuItem(value: 'image', child: Text('صورة')), PopupMenuItem(value: 'video', child: Text('فيديو'))], icon: const Icon(Icons.attach_file_rounded)),
         Expanded(child: TextField(controller: text, maxLines: 4, minLines: 1, textInputAction: TextInputAction.newline, decoration: const InputDecoration(hintText: 'اكتب رسالة…', border: OutlineInputBorder(), isDense: true))),
         IconButton(tooltip: recording ? 'إيقاف التسجيل وإرساله' : 'تسجيل رسالة صوتية', onPressed: sending ? null : toggleRecording, icon: Icon(recording ? Icons.stop_circle : Icons.mic_none_rounded, color: recording ? Colors.red : AppColors.purple)),
-        IconButton(tooltip: 'إرسال', onPressed: sending ? null : () => send(), icon: sending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send_rounded, color: AppColors.purple)),
+        IconButton.filled(tooltip: 'إرسال', style: IconButton.styleFrom(backgroundColor: AppColors.purple, foregroundColor: Colors.white, minimumSize: const Size(40, 40)), onPressed: sending ? null : () => send(), icon: sending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.arrow_upward_rounded, size: 20)),
       ])),
     ]);
   }
   Widget messageBubble(Map<String, dynamic> m) {
     final own = m['authorId'] == widget.store.sessionReg;
+    final member = _memberFor(m['authorId'] as String?);
     final mediaUrl = m['mediaUrl'] as String? ?? '';
     final type = m['mediaType'] as String? ?? '';
     final reactions = (m['reactions'] as List? ?? []).whereType<Map>().toList();
     final date = DateTime.tryParse(m['createdAt'] as String? ?? '')?.toLocal();
-    return _SwipeReply(key: ValueKey(m['id']), onReply: () => setState(() => reply = m), child: Align(alignment: own ? Alignment.centerLeft : Alignment.centerRight,
-      child: GestureDetector(onLongPress: () => chooseReaction(m), child: Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), constraints: const BoxConstraints(maxWidth: 330), decoration: BoxDecoration(color: own ? AppColors.softViolet : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.line)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        Text(m['authorName'] as String? ?? 'عضو', style: const TextStyle(color: AppColors.purple, fontWeight: FontWeight.w800, fontSize: 12)),
-        if ((m['replyId'] as String? ?? '').isNotEmpty) Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: Colors.black.withValues(alpha: .04), borderRadius: BorderRadius.circular(8)), child: Text('رد على ${m['replyName']}: ${m['replyText']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11))),
-        if (mediaUrl.isNotEmpty && type.startsWith('image/')) GestureDetector(onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(mediaUrl)))), child: Padding(padding: const EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(mediaUrl, height: 180, width: 260, fit: BoxFit.cover, errorBuilder: (_, error, stack) => const Text('تعذّر تحميل الصورة'))))),
-        if (mediaUrl.isNotEmpty && type.startsWith('video/')) TextButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _VideoScreen(url: mediaUrl))), icon: const Icon(Icons.play_circle_outline), label: const Text('معاينة الفيديو')),
-        if (mediaUrl.isNotEmpty && type.startsWith('audio/')) _VoiceMessage(key: ValueKey('voice_${m['id']}'), url: mediaUrl, own: own),
-        if (mediaUrl.isNotEmpty) TextButton.icon(onPressed: () async { try { await saveMedia(mediaUrl); } catch (e) { fail(e); } }, icon: const Icon(Icons.download_rounded, size: 16), label: const Text('حفظ', style: TextStyle(fontSize: 12))),
-        if ((m['text'] as String? ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(m['text'] as String, style: const TextStyle(fontSize: 14, height: 1.5))),
-        Row(mainAxisSize: MainAxisSize.min, children: [if (date != null) Text('${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 10, color: AppColors.muted)), const SizedBox(width: 8), for (final r in reactions.take(8)) Text('${r['emoji']} ', style: const TextStyle(fontSize: 13)), InkWell(onTap: () => chooseReaction(m), child: const Icon(Icons.add_reaction_outlined, size: 16, color: AppColors.muted))]),
-      ])))));
+    final maxBubble = math.min(315.0, math.max(130.0, MediaQuery.sizeOf(context).width - 104));
+    final avatar = GestureDetector(onTap: () => _openMember(member), child: member != null
+      ? MemberAvatar(member: member, size: 34)
+      : const CircleAvatar(radius: 17, backgroundColor: AppColors.softViolet, child: Icon(Icons.person_outline, size: 19, color: AppColors.purple)));
+    final content = Container(
+      constraints: BoxConstraints(maxWidth: maxBubble),
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
+      decoration: BoxDecoration(
+        color: own ? const Color(0xFFF1EAFE) : Colors.white,
+        borderRadius: BorderRadius.only(topLeft: const Radius.circular(18), topRight: const Radius.circular(18), bottomLeft: Radius.circular(own ? 6 : 18), bottomRight: Radius.circular(own ? 18 : 6)),
+        border: Border.all(color: own ? const Color(0xFFE6D9F7) : const Color(0xFFECE8EF)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        if (!own) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(m['authorName'] as String? ?? 'عضو', style: const TextStyle(color: AppColors.purple, fontWeight: FontWeight.w700, fontSize: 11))),
+        if ((m['replyId'] as String? ?? '').isNotEmpty) Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6), decoration: BoxDecoration(color: Colors.black.withValues(alpha: .04), borderRadius: BorderRadius.circular(9)), child: Text('${m['replyName']}  ·  ${m['replyText']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.muted))),
+        if (mediaUrl.isNotEmpty && type.startsWith('image/'))
+          _MediaFrame(url: mediaUrl, child: GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ImageScreen(url: mediaUrl))), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 290, maxWidth: 270, minWidth: 130), child: Image.network(mediaUrl, fit: BoxFit.contain, errorBuilder: (_, error, stack) => const SizedBox(height: 110, child: Center(child: Text('تعذّر تحميل الصورة')))))), onSave: () => saveMedia(mediaUrl)),
+        if (mediaUrl.isNotEmpty && type.startsWith('video/'))
+          _MediaFrame(url: mediaUrl, child: _VideoPreview(url: mediaUrl), onSave: () => saveMedia(mediaUrl)),
+        if (mediaUrl.isNotEmpty && type.startsWith('audio/'))
+          _VoiceMessage(key: ValueKey('voice_${m['id']}'), url: mediaUrl, own: own),
+        if (mediaUrl.isNotEmpty && type.startsWith('audio/'))
+          Align(alignment: Alignment.centerLeft, child: InkWell(onTap: () async { try { await saveMedia(mediaUrl); } catch (e) { fail(e); } }, child: const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.download_rounded, size: 17, color: AppColors.muted)))),
+        if ((m['text'] as String? ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: Text(m['text'] as String, style: const TextStyle(fontSize: 14, height: 1.48, color: AppColors.ink))),
+        const SizedBox(height: 4),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          if (date != null) Text('${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+          if (reactions.isNotEmpty) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .8), borderRadius: BorderRadius.circular(20)), child: Text(reactions.take(5).map((r) => r['emoji']).join(' '), style: const TextStyle(fontSize: 12)))],
+        ]),
+      ]),
+    );
+    return _SwipeReply(key: ValueKey(m['id']), onReply: () => setState(() => reply = m),
+      child: Padding(padding: const EdgeInsets.only(bottom: 9), child: Row(
+        textDirection: own ? TextDirection.ltr : TextDirection.rtl,
+        crossAxisAlignment: CrossAxisAlignment.end, children: [
+          avatar, const SizedBox(width: 7),
+          Flexible(child: _HeartReaction(key: ValueKey('heart_${m['id']}'), onDoubleTap: () => _react(m, '❤️'), onLongPress: () => chooseReaction(m), child: content)),
+          const Spacer(),
+        ],
+      )));
   }
+
+}
+
+class _HeartReaction extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onDoubleTap;
+  final VoidCallback onLongPress;
+  const _HeartReaction({super.key, required this.child, required this.onDoubleTap, required this.onLongPress});
+  @override State<_HeartReaction> createState() => _HeartReactionState();
+}
+class _HeartReactionState extends State<_HeartReaction> with SingleTickerProviderStateMixin {
+  late final AnimationController controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 850));
+  @override void dispose() { controller.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => GestureDetector(
+    onLongPress: widget.onLongPress,
+    onDoubleTap: () { HapticFeedback.lightImpact(); controller.forward(from: 0); widget.onDoubleTap(); },
+    child: Stack(alignment: Alignment.center, children: [
+      widget.child,
+      IgnorePointer(child: AnimatedBuilder(animation: controller, builder: (context, child) {
+        final t = controller.value;
+        final opacity = t == 0 ? 0.0 : (t < .7 ? 1.0 : ((1-t)/.3).clamp(0.0, 1.0));
+        final scale = t < .30 ? Curves.elasticOut.transform((t/.30).clamp(0.0, 1.0)) : 1.0;
+        return Opacity(opacity: opacity, child: Transform.scale(scale: scale, child: child));
+      }, child: const Icon(Icons.favorite_rounded, size: 64, color: Color(0xFFE53159), shadows: [Shadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4))]))),
+    ]),
+  );
+}
+
+class _MediaFrame extends StatelessWidget {
+  final String url;
+  final Widget child;
+  final Future<void> Function() onSave;
+  const _MediaFrame({required this.url, required this.child, required this.onSave});
+  @override Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 5, bottom: 3),
+    child: ClipRRect(borderRadius: BorderRadius.circular(13), child: Stack(children: [
+      child,
+      PositionedDirectional(top: 6, end: 6, child: Material(color: Colors.black54, shape: const CircleBorder(), child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () async { try { await onSave(); } catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذّر فتح رابط الحفظ'))); } },
+        child: const Padding(padding: EdgeInsets.all(7), child: Icon(Icons.download_rounded, color: Colors.white, size: 18)),
+      ))),
+    ])),
+  );
+}
+class _ImageScreen extends StatelessWidget {
+  final String url;
+  const _ImageScreen({required this.url});
+  @override Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: const Text('الصورة')),
+    body: Center(child: InteractiveViewer(minScale: .7, maxScale: 5, child: Image.network(url, fit: BoxFit.contain,
+      loadingBuilder: (context, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator()),
+      errorBuilder: (_, error, stack) => const Text('تعذّر تحميل الصورة', style: TextStyle(color: Colors.white))))),
+  );
+}
+class _VideoPreview extends StatefulWidget {
+  final String url;
+  const _VideoPreview({required this.url});
+  @override State<_VideoPreview> createState() => _VideoPreviewState();
+}
+class _VideoPreviewState extends State<_VideoPreview> {
+  late VideoPlayerController video;
+  late Future<void> loading;
+  @override void initState() { super.initState(); _load(); }
+  void _load() { video = VideoPlayerController.networkUrl(Uri.parse(widget.url)); loading = video.initialize(); }
+  @override void didUpdateWidget(covariant _VideoPreview oldWidget) { super.didUpdateWidget(oldWidget); if (oldWidget.url != widget.url) { video.dispose(); _load(); } }
+  @override void dispose() { video.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) => SizedBox(width: 260, height: 160, child: InkWell(
+    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _VideoScreen(url: widget.url))),
+    child: Stack(fit: StackFit.expand, alignment: Alignment.center, children: [
+      Container(color: const Color(0xFF221836)),
+      FutureBuilder<void>(future: loading, builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done || snapshot.hasError) return const SizedBox.shrink();
+        return FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge, child: SizedBox(width: video.value.size.width, height: video.value.size.height, child: VideoPlayer(video)));
+      }),
+      Center(child: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30))),
+    ]),
+  ));
 }
 
 class _SwipeReply extends StatefulWidget {

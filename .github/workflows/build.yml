@@ -220,7 +220,7 @@ jobs:
         run: flutter pub get
 
       - name: Test activity synchronization
-        run: flutter test test/activities_test.dart test/activity_empty_ui_test.dart
+        run: flutter test test/activities_test.dart test/activity_empty_ui_test.dart test/chat_member_profile_test.dart
 
       - name: Build signed APK (universal)
         run: |
@@ -294,19 +294,19 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.12.1
-          name: EPC App v1.12.1 — نادي رواد الاقتصاد
+          tag_name: v1.13.0
+          name: EPC App v1.13.0 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.12.1 — توافق أوسع للتثبيت
+            ### الإصدار 1.13.0 — توافق أوسع للتثبيت
 
             **ملفات APK فقط هي التي تُثبَّت** — لا تُثبّت ملفات `.aab` (متجر Google Play فقط).
 
             | الملف | لمن؟ |
             |---|---|
-            | `EPC-Club-1.12.1-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
-            | `EPC-Club-1.12.1-universal.apk` | يعمل على كل الأجهزة |
-            | ⛔ `EPC-Club-1.12.1-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
+            | `EPC-Club-1.13.0-arm64.apk` | كل الهواتف الحديثة (الأصغر والأسرع — ابدأ به) |
+            | `EPC-Club-1.13.0-universal.apk` | يعمل على كل الأجهزة |
+            | ⛔ `EPC-Club-1.13.0-playstore.aab` | **لا يُثبَّت** — للمتجر فقط |
 
             **رابط تنزيل مباشر:** https://epc-sync.salemdopamine.workers.dev/app
             **الويب:** https://epc-club.pages.dev — https://aitecomp.github.io/epc_app/
@@ -317,7 +317,7 @@ jobs:
             3. احذف النسخة القديمة من التطبيق أولًا (اختلاف مفتاح التوقيع يمنع التحديث).
             4. على سامسونج: الإعدادات ← الأمان والخصوصية ← **Auto Blocker** ← إيقافه.
             5. على شاومي/ريدمي: الإعدادات ← الخصوصية ← تثبيت من مصادر غير معروفة ← السماح.
-            6. جرّب `EPC-Club-1.12.1-universal.apk` بدل نسخة arm64.
+            6. جرّب `EPC-Club-1.13.0-universal.apk` بدل نسخة arm64.
           files: |
             out/*.apk
             out/SHA256.txt
