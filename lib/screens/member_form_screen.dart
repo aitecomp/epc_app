@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/photo_cache.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/search_picker.dart';
@@ -315,7 +316,7 @@ class _MemberFormScreenState extends State<MemberFormScreen> {
                 child: ClipOval(
                   child: _photo.isEmpty
                       ? Icon(Icons.person, size: 52, color: AppColors.purple.withValues(alpha: 0.45))
-                      : Image.memory(base64Decode(_photo), fit: BoxFit.cover),
+                      : Image.memory(PhotoBytesCache.decode(_photo), fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const Icon(Icons.person)),
                 ),
               ),
               Positioned(

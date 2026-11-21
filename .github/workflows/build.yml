@@ -220,7 +220,7 @@ jobs:
         run: flutter pub get
 
       - name: Test activity synchronization
-        run: flutter test test/activities_test.dart test/activity_empty_ui_test.dart test/chat_member_profile_test.dart
+        run: flutter test test/activities_test.dart test/activity_empty_ui_test.dart test/chat_member_profile_test.dart test/photo_cache_test.dart
 
       - name: Build signed APK (universal)
         run: |
@@ -311,16 +311,16 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.15.0
-          name: EPC App v1.15.0 — نادي رواد الاقتصاد
+          tag_name: v1.15.1
+          name: EPC App v1.15.1 — نادي رواد الاقتصاد
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.15.0 — هوية الشعار وملفات الأعضاء
+            ### الإصدار 1.15.1 — تحسين استقرار الصور
 
-            ألوان مستوحاة من شعار النادي، مع ملف عضو يعرض البطاقة الكاملة القابلة للقلب ورمز QR ومعلومات العضوية.
+            تحسين ثبات صور الأعضاء وصور المحادثة أثناء التحديث والمزامنة.
 
-            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.15.0/EPC-Club-1.15.0-compatible.apk)
-            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.15.0/EPC-Club-1.15.0-universal.apk)
+            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.15.1/EPC-Club-1.15.1-compatible.apk)
+            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.15.1/EPC-Club-1.15.1-universal.apk)
             - [تطبيق الويب](https://epc-club.pages.dev)
 
           files: |

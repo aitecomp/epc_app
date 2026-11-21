@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/services.dart';
@@ -60,7 +61,10 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final next = await api.messages();
       if (mounted) {
-        setState(() { messages = next; loading = false; error = null; });
+        // Polling should not rebuild every image when no message changed.
+        if (loading || error != null || jsonEncode(messages) != jsonEncode(next)) {
+          setState(() { messages = next; loading = false; error = null; });
+        }
         await ChatUnread.update(next, widget.store.sessionReg, active: widget.isActive);
       }
     } catch (e) { if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Bad state: ', ''); }); }
@@ -204,7 +208,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!own) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(m['authorName'] as String? ?? 'عضو', style: const TextStyle(color: AppColors.purple, fontWeight: FontWeight.w700, fontSize: 11))),
         if ((m['replyId'] as String? ?? '').isNotEmpty) Container(margin: const EdgeInsets.only(bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6), decoration: BoxDecoration(color: Colors.black.withValues(alpha: .04), borderRadius: BorderRadius.circular(9)), child: Text('${m['replyName']}  ·  ${m['replyText']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.muted))),
         if (mediaUrl.isNotEmpty && type.startsWith('image/'))
-          _MediaFrame(url: mediaUrl, child: GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ImageScreen(url: mediaUrl))), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 290, maxWidth: 270, minWidth: 130), child: Image.network(mediaUrl, fit: BoxFit.contain, errorBuilder: (_, error, stack) => const SizedBox(height: 110, child: Center(child: Text('تعذّر تحميل الصورة')))))), onSave: () => saveMedia(mediaUrl)),
+          _MediaFrame(url: mediaUrl, child: GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ImageScreen(url: mediaUrl))), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 290, maxWidth: 270, minWidth: 130), child: Image.network(mediaUrl, fit: BoxFit.contain, gaplessPlayback: true, errorBuilder: (_, error, stack) => const SizedBox(height: 110, child: Center(child: Text('تعذّر تحميل الصورة')))))), onSave: () => saveMedia(mediaUrl)),
         if (mediaUrl.isNotEmpty && type.startsWith('video/'))
           _MediaFrame(url: mediaUrl, child: _VideoPreview(url: mediaUrl), onSave: () => saveMedia(mediaUrl)),
         if (mediaUrl.isNotEmpty && type.startsWith('audio/'))
@@ -295,7 +299,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
   late Future<void> loading;
   @override void initState() { super.initState(); _load(); }
   void _load() { video = VideoPlayerController.networkUrl(Uri.parse(widget.url)); loading = video.initialize(); }
-  @override void didUpdateWidget(covariant _VideoPreview oldWidget) { super.didUpdateWidget(oldWidget); if (oldWidget.url != widget.url) { video.dispose(); _load(); } }
+  @override void didUpdateWidget(covariant _VideoPreview oldWidget) { super.didUpdateWidget(oldWidget); if (Uri.tryParse(oldWidget.url)?.path != Uri.tryParse(widget.url)?.path) { video.dispose(); _load(); } }
   @override void dispose() { video.dispose(); super.dispose(); }
   @override Widget build(BuildContext context) => SizedBox(width: 260, height: 160, child: InkWell(
     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _VideoScreen(url: widget.url))),

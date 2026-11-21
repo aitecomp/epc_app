@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core/photo_cache.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 
@@ -730,15 +730,19 @@ class _Photo extends StatelessWidget {
     if (member.photoBase64.isNotEmpty) {
       try {
         return Image.memory(
-          base64Decode(member.photoBase64),
+          PhotoBytesCache.decode(member.photoBase64),
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,
           gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => _fallbackPhoto(),
         );
       } catch (_) {}
     }
-    return Container(
+    return _fallbackPhoto();
+  }
+
+  Widget _fallbackPhoto() => Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -759,7 +763,6 @@ class _Photo extends StatelessWidget {
         ),
       ),
     );
-  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1037,7 +1040,7 @@ class MemberAvatar extends StatelessWidget {
     Widget child;
     if (member.photoBase64.isNotEmpty) {
       try {
-        child = Image.memory(base64Decode(member.photoBase64), fit: BoxFit.cover);
+        child = Image.memory(PhotoBytesCache.decode(member.photoBase64), fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => _fallback());
       } catch (_) {
         child = _fallback();
       }
