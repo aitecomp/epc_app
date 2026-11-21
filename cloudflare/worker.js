@@ -33,7 +33,8 @@ export default {
 
     // ── تنزيل تطبيق الأندرويد مباشرة (بدون مفتاح) ──────────────────────
     if (path === '/app' || path === '/app.apk') {
-      const object = await env.EPC_BUCKET.get('epc-arm64.apk');
+      const object = (await env.EPC_BUCKET.get('epc-arm64.apk')) ||
+        (await env.EPC_BUCKET.get('epc-universal.apk'));
       if (!object) return json({ error: 'apk not uploaded yet' }, 404);
       const headers = new Headers();
       headers.set('content-type', 'application/vnd.android.package-archive');
