@@ -48,6 +48,7 @@ class PushNotifications {
     final updated = data['operation'] == 'update';
     await Notifications.showNow(
       id: Notifications.idFor('new_$id'),
+      activityId: id,
       title: updated ? 'تحديث نشاط النادي' : 'نشاط جديد في النادي',
       body: title,
     );
@@ -55,6 +56,7 @@ class PushNotifications {
     if (date != null && date.isAfter(DateTime.now())) {
       await Notifications.scheduleAt(
         id: reminderId,
+        activityId: id,
         when: date,
         title: 'تذكير: $title',
         body: place.isEmpty ? 'حان وقت النشاط' : place,

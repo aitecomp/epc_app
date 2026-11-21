@@ -9,6 +9,8 @@ import 'package:timezone/timezone.dart' as tz;
 class Notifications {
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   static bool _ready = false;
+  static void Function(String)? onActivityTap;
+  static String? launchActivityId;
   static bool get ready => _ready;
 
   static const String channelId = 'epc_activities';
@@ -37,7 +39,17 @@ class Notifications {
         iOS: darwin,
         macOS: darwin,
       );
-      await _plugin.initialize(settings: settings);
+      await _plugin.initialize(
+        settings: settings,
+        onDidReceiveNotificationResponse: (response) {
+          final payload = response.payload;
+          if (payload != null && payload.isNotEmpty) onActivityTap?.call(payload);
+        },
+      );
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp == true) {
+        launchActivityId = launch?.notificationResponse?.payload;
+      }
       _ready = true;
       if (requestPermission) await requestPermissions();
     } catch (_) {
@@ -86,6 +98,7 @@ class Notifications {
     required int id,
     required String title,
     required String body,
+    String? activityId,
   }) async {
     if (!_ready) return;
     try {
@@ -94,6 +107,7 @@ class Notifications {
         title: title,
         body: body,
         notificationDetails: _details,
+        payload: activityId,
       );
     } catch (_) {}
   }
@@ -104,6 +118,7 @@ class Notifications {
     required DateTime when,
     required String title,
     required String body,
+    String? activityId,
   }) async {
     if (!_ready) return false;
     final at = tz.TZDateTime.from(when, tz.local);
@@ -115,6 +130,7 @@ class Notifications {
         body: body,
         scheduledDate: at,
         notificationDetails: _details,
+        payload: activityId,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
       return true;
@@ -127,6 +143,7 @@ class Notifications {
           body: body,
           scheduledDate: at,
           notificationDetails: _details,
+          payload: activityId,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );
         return true;

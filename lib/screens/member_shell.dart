@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,19 +29,21 @@ class MemberShell extends StatefulWidget {
 
 class _MemberShellState extends State<MemberShell> {
   int _index = 0;
+  Timer? _clockTimer;
 
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) { if (mounted) setState(() {}); });
     widget.store.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.store.markActivitiesSeen();
       ActivityNotifier.scheduleUpcoming(widget.store);
     });
   }
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
     widget.store.removeListener(_onChange);
     super.dispose();
   }

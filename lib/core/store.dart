@@ -337,7 +337,7 @@ class Activity {
         title: (json['title'] ?? '').toString(),
         details: (json['details'] ?? '').toString(),
         place: (json['place'] ?? '').toString(),
-        at: DateTime.tryParse((json['at'] ?? '').toString()) ?? DateTime.now(),
+        at: DateTime.tryParse((json['at'] ?? '').toString())?.toLocal() ?? DateTime.now(),
         createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ?? DateTime.now(),
         updatedAt: DateTime.tryParse((json['updatedAt'] ?? '').toString()) ?? DateTime.now(),
       );
@@ -643,10 +643,6 @@ class MemberStore extends ChangeNotifier {
         _sortActivities();
         _unseenActivities.addAll(newlyPublished.map((a) => a.id));
         lastSyncedNewActivities = newlyPublished;
-        for (final a in newlyPublished) {
-          _notified[a.id] = now;
-        }
-        await _saveNotified();
       }
     }
 

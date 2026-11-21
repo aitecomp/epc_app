@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/activity_notifier.dart';
+import 'activity_detail_screen.dart';
+import 'notifications_screen.dart';
 import '../core/cloud_sync.dart';
 import '../core/push_notifications.dart';
 import '../core/store.dart';
@@ -27,7 +29,6 @@ class ActivitiesTab extends StatelessWidget {
       await CloudSync.syncNow(store);
     }
     await ActivityNotifier.scheduleUpcoming(store);
-    markActivitiesSeen(store);
   }
 
   static void markActivitiesSeen(MemberStore store) {
@@ -190,7 +191,7 @@ class ActivitiesTab extends StatelessWidget {
                 ),
               ),
               GestureDetector(
-                onTap: onOpenProfile,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NotificationsScreen(store: store))),
                 child: Container(
                   width: 40,
                   height: 40,
@@ -200,8 +201,12 @@ class ActivitiesTab extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.16),
                     border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                   ),
-                  child: const Icon(Icons.person_outline_rounded,
-                      color: Colors.white, size: 20),
+                  child: Badge(
+                    isLabelVisible: store.unseenActivitiesCount > 0,
+                    label: Text('${store.unseenActivitiesCount}'),
+                    backgroundColor: Colors.red,
+                    child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 22),
+                  ),
                 ),
               ),
             ],
@@ -333,7 +338,9 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ActivityDetailScreen(activity: activity))),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -492,6 +499,7 @@ class _ActivityCard extends StatelessWidget {
               ),
             ),
         ],
+      ),
       ),
     );
   }

@@ -11,8 +11,21 @@ import 'core/push_notifications.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
 import 'screens/leader_shell.dart';
+import 'screens/activity_detail_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/member_shell.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
+
+Future<void> openActivity(String id) async {
+  if (CloudSync.enabled) await CloudSync.syncNow(MemberStore.instance);
+  if (MemberStore.instance.sessionReg == null) return;
+  final matches = MemberStore.instance.activities.where((a) => a.id == id);
+  if (matches.isEmpty) return;
+  navigatorKey.currentState?.push(MaterialPageRoute(
+    builder: (_) => ActivityDetailScreen(activity: matches.first),
+  ));
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,9 +45,14 @@ void main() async {
   await MemberStore.instance.init();
   // إشعارات النشاطات (فوري عند النشر + منبّه في الوقت المحدّد)
   await Notifications.init();
-  await PushNotifications.init();
+  Notifications.onActivityTap = (id) { unawaited(openActivity(id)); };
+  unawaited(PushNotifications.init());
 
   runApp(const EpcApp());
+  final launchId = Notifications.launchActivityId;
+  if (launchId != null && launchId.isNotEmpty) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(openActivity(launchId)));
+  }
   // مزامنة سحابية في الخلفية (Cloudflare R2)
   if (CloudSync.enabled) {
     CloudSync.syncNow(MemberStore.instance);
@@ -58,6 +76,7 @@ class EpcApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'نادي رواد الاقتصاد — EPC',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.build(),

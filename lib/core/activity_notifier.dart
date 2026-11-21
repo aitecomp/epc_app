@@ -10,9 +10,9 @@ class ActivityNotifier {
     for (final activity in store.upcomingActivities) {
       if (activity.at.isBefore(now)) continue;
       if (store.isActivityNotified(activity.id)) continue;
-      if (activity.at.difference(now).inSeconds < 30) continue;
       final ok = await Notifications.scheduleAt(
         id: Notifications.idFor('activity_${activity.id}'),
+        activityId: activity.id,
         when: activity.at,
         title: 'تذكير: ${activity.title}',
         body: _scheduleBody(activity),
@@ -29,6 +29,7 @@ class ActivityNotifier {
     for (final activity in fresh) {
       await Notifications.showNow(
         id: Notifications.idFor('new_${activity.id}'),
+        activityId: activity.id,
         title: 'نشاط جديد في النادي',
         body: '${activity.title} — ${activity.weekdayLabel} ${activity.dateLabel} '
             'على الساعة ${activity.timeLabel}',
@@ -51,6 +52,7 @@ class ActivityNotifier {
     if (activity.at.isAfter(DateTime.now())) {
       await Notifications.scheduleAt(
         id: Notifications.idFor('activity_${activity.id}'),
+        activityId: activity.id,
         when: activity.at,
         title: 'تذكير: ${activity.title}',
         body: _scheduleBody(activity),
