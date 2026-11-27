@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "dz.epc.epc_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = maxOf(flutter.compileSdkVersion, 35)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -30,7 +30,7 @@ android {
         applicationId = (project.findProperty("epcApplicationId") as String?) ?: "com.club.app"
         // يمكن بناء نسخة "legacy" لدعم أندرويد 5/6 عبر ORG_GRADLE_PROJECT_epcMinSdk=21
         minSdk = (project.findProperty("epcMinSdk") as String?)?.toInt() ?: maxOf(flutter.minSdkVersion, 23)
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = maxOf(flutter.targetSdkVersion, 35)
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

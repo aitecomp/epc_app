@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/cloud_sync.dart';
 import '../core/store.dart';
@@ -81,6 +82,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) toast(context, 'تعذّر تحديث الصورة', error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    if (CloudSync.enabled) {
+      final uri = Uri.parse('${CloudSync.url.replaceAll(RegExp(r'/+$'), '')}/privacy');
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('سياسة الخصوصية', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: const Text(
+          'تُستخدم بيانات عضويتك حصرياً لإدارة أنشطة نادي رواد الاقتصاد والتواصل الداخلي ولا تُشارك مع أي جهات إعلانية. يمكنك حذف حسابك في أي وقت من شاشة البروفيل.',
+          style: TextStyle(fontSize: 13, height: 1.6),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسناً'))],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteOwnAccount() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('حذف حسابي وبياناتي', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFB91C1C))),
+        content: const Text(
+          'سيتم حذف عضويتك وجميع بياناتك الشخصية نهائياً من النادي وتسجيل خروجك فوراً. هل أنت متأكد؟',
+          style: TextStyle(fontSize: 13, height: 1.55),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    await MemberStore.instance.deleteMember(widget.member.id);
+    await CloudSync.push(MemberStore.instance);
+    if (mounted) {
+      toast(context, 'تم حذف حسابك وبياناتك بنجاح');
+      widget.onLogout();
     }
   }
 
@@ -170,21 +221,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: _busy ? null : _changePhoto,
               ),
               const SizedBox(height: 10),
+              GhostButton(
+                label: 'سياسة الخصوصية',
+                icon: Icons.privacy_tip_outlined,
+                onPressed: _openPrivacyPolicy,
+              ),
+              const SizedBox(height: 10),
               SizedBox(
-                height: 50,
+                height: 46,
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: widget.onLogout,
-                  icon: const Icon(Icons.logout, size: 19),
+                  icon: const Icon(Icons.logout, size: 18),
                   label: const Text('تسجيل الخروج',
                       style: TextStyle(fontWeight: FontWeight.w700)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFB91C1C),
                     side: BorderSide(color: const Color(0xFFB91C1C).withValues(alpha: 0.35)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
               ),
+              if (!widget.isLeader) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: _busy ? null : _confirmDeleteOwnAccount,
+                  icon: const Icon(Icons.delete_forever_outlined, size: 17, color: Color(0xFFB91C1C)),
+                  label: const Text('حذف حسابي وبياناتي نهائياً',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFB91C1C), fontWeight: FontWeight.w700)),
+                ),
+              ],
               ],
             ],
           ),

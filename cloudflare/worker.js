@@ -954,6 +954,16 @@ export default {
 
     if (path === '/health') return json({ ok: true, service: 'epc-sync' });
 
+    if (path === '/privacy' && request.method === 'GET') {
+      const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>سياسة الخصوصية — نادي رواد الاقتصاد (EPC)</title><style>body{font-family:Tahoma,Arial,sans-serif;background:#f3f6fa;color:#0f1d2e;margin:0;padding:24px;line-height:1.8}.card{max-width:740px;margin:0 auto;background:#fff;border-radius:18px;padding:28px;border:1px solid #e2e8f0}h1{color:#173452;margin-top:0}h2{color:#173452;font-size:18px;margin-top:22px}.muted{color:#64748b;font-size:13px}</style></head><body><div class="card"><h1>سياسة الخصوصية — نادي رواد الاقتصاد (EPC Club)</h1><p class="muted">آخر تحديث: نوفمبر 2026</p><p>يحترم تطبيق نادي رواد الاقتصاد (Economics Pioneers Club — جامعة غيليزان) خصوصية مستخدميه من الأعضاء والضيوف، ويلتزم بحماية بياناتهم الشخصية.</p><h2>1. البيانات التي نجمعها</h2><ul><li>بيانات العضوية وطلبات الانضمام: الاسم، اللقب، التخصص الجامعي، المستوى الدراسي، رقم التسجيل، رقم الهاتف، البريد الإلكتروني (اختياري)، والصورة الشخصية (اختياري).</li><li>المحتوى الذي ينشره المستخدم: رسائل الدردشة، التعليقات، الأفكار والاستطلاعات، والصور أو الفيديوهات المرفوعة.</li><li>رمز الإشعارات (FCM Token) لإرسال إشعارات النادي والتنبيهات المخصصة فقط.</li></ul><h2>2. كيفية استخدام البيانات</h2><p>تُستخدم البيانات حصرياً لإدارة عضوية النادي، عرض بطاقة العضو، تمكين التواصل الداخلي، ومراجعة طلبات الانضمام. لا نبيع أو نشارك بياناتك مع أي جهات إعلانية أو أطراف ثالثة.</p><h2>3. الأمان وتخزين البيانات</h2><p>تُحفظ البيانات عبر Cloudflare R2 وتُنقل عبر اتصال مشفّر HTTPS/TLS.</p><h2>4. حذف الحساب والبيانات</h2><p>يمكن لأي عضو حذف حسابه وبياناته مباشرة من داخل التطبيق عبر: <strong>البروفيل ← حذف حسابي وبياناتي</strong>، أو عبر صفحة <a href="/account-deletion">طلب حذف الحساب</a>.</p><h2>5. التواصل</h2><p>للاستفسارات المتعلقة بالخصوصية، يرجى التواصل مع قيادة نادي رواد الاقتصاد بجامعة غيليزان.</p></div></body></html>`;
+      return new Response(html, { status: 200, headers: { ...SECURITY_HEADERS, 'content-type': 'text/html; charset=utf-8' } });
+    }
+
+    if (path === '/account-deletion' && request.method === 'GET') {
+      const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حذف الحساب — نادي رواد الاقتصاد (EPC)</title><style>body{font-family:Tahoma,Arial,sans-serif;background:#f3f6fa;color:#0f1d2e;margin:0;padding:24px;line-height:1.8}.card{max-width:680px;margin:0 auto;background:#fff;border-radius:18px;padding:28px;border:1px solid #e2e8f0}h1{color:#173452;margin-top:0}</style></head><body><div class="card"><h1>حذف الحساب والبيانات — EPC Club</h1><p>يمكنك حذف حسابك وجميع بيانات عضويتك نهائياً في أي وقت بإحدى الطريقتين:</p><ol><li><strong>من داخل التطبيق مباشرة:</strong> افتح تبويب <em>البروفيل</em> ثم اضغط على <em>حذف حسابي وبياناتي</em> وأكّد العملية ليتم حذف بطاقتك وبياناتك فوراً من قاعدة النادي.</li><li><strong>عبر قيادة النادي:</strong> تواصل مع قائد نادي رواد الاقتصاد مع تزويده برقم التسجيل الجامعي ليتم حذف بياناتك خلال 48 ساعة.</li></ol><p>البيانات المحذوفة تشمل: الاسم، الصورة الشخصية، رقم الهاتف، البريد الإلكتروني، وبيانات الدخول.</p></div></body></html>`;
+      return new Response(html, { status: 200, headers: { ...SECURITY_HEADERS, 'content-type': 'text/html; charset=utf-8' } });
+    }
+
     if (path === '/app' || path === '/app.apk') {
       const object = (await env.EPC_BUCKET.get('epc-arm64.apk')) ||
         (await env.EPC_BUCKET.get('epc-universal.apk'));
@@ -991,6 +1001,20 @@ export default {
         const good = await env.EPC_BUCKET.put(testKey, 'second', { onlyIf: { etagMatches: obj.etag } });
         return json({ ok: !!first && !!obj && !bad && !!good });
       } finally { await env.EPC_BUCKET.delete(testKey); }
+    }
+
+    if (path === '/reports' && request.method === 'POST') {
+      let data; try { data = await request.json(); } catch (_) { return json({ error: 'invalid json' }, 400); }
+      const id = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+      const report = {
+        id,
+        targetType: String(data.targetType || 'content').slice(0, 40),
+        targetId: String(data.targetId || '').slice(0, 120),
+        reason: String(data.reason || 'محتوى غير لائق').slice(0, 400),
+        createdAt: new Date().toISOString(),
+      };
+      await env.EPC_BUCKET.put(`reports/${id}`, JSON.stringify(report), { httpMetadata: { contentType: 'application/json' } });
+      return json({ ok: true, id });
     }
 
     if (path.startsWith('/chat/')) return chatHandler(request, env, url, ctx);

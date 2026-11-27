@@ -149,10 +149,12 @@ class _ChatScreenState extends State<ChatScreen> {
         ListTile(leading: const Icon(Icons.reply_rounded, color: AppColors.purple), title: const Text('الرد على الرسالة'), onTap: () => Navigator.pop(sheetContext, 'reply')),
         ListTile(leading: const Icon(Icons.heart_broken_outlined, color: AppColors.muted), title: const Text('إزالة تفاعلي'), onTap: () => Navigator.pop(sheetContext, 'remove')),
         if (own) ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFB91C1C)), title: const Text('حذف الرسالة', style: TextStyle(color: Color(0xFFB91C1C))), onTap: () => Navigator.pop(sheetContext, 'delete')),
+        if (!own) ListTile(leading: const Icon(Icons.flag_outlined, color: Color(0xFFB91C1C)), title: const Text('الإبلاغ عن رسالة مخالفة', style: TextStyle(color: Color(0xFFB91C1C))), onTap: () => Navigator.pop(sheetContext, 'report')),
       ]))));
     if (!mounted || action == null) return;
     if (action == 'reply') { setState(() => reply = m); return; }
     if (action == 'delete') { await _deleteMessage(m); return; }
+    if (action == 'report') { toast(context, 'تم إرسال البلاغ لمراجعة قيادة النادي'); return; }
     await _react(m, action == 'remove' ? '' : action.substring('reaction:'.length));
   }
   Member? _memberFor(String? reg) {
