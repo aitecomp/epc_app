@@ -350,6 +350,7 @@ class MemberStore extends ChangeNotifier {
 
   static const _kMembers = 'epc_members_v2';
   static const _kSession = 'epc_session_v2';
+  static const _kGuestMode = 'epc_guest_mode_v1';
   static const _kLeaderReg = 'epc_leader_reg';
   static const _kLeaderPass = 'epc_leader_pass';
   static const _kDeleted = 'epc_deleted_v2';
@@ -408,6 +409,20 @@ class MemberStore extends ChangeNotifier {
   }
 
   bool get isLeaderSession => sessionReg != null && sessionReg == leaderReg;
+
+  bool get isGuestSession => sessionReg == null && (_prefs?.getBool(_kGuestMode) == true);
+
+  Future<void> enterGuestMode() async {
+    await _prefs?.remove(_kSession);
+    await _prefs?.setBool(_kGuestMode, false);
+    await _prefs?.setBool(_kGuestMode, true);
+    notifyListeners();
+  }
+
+  Future<void> exitGuestMode() async {
+    await _prefs?.setBool(_kGuestMode, false);
+    notifyListeners();
+  }
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -742,6 +757,7 @@ class MemberStore extends ChangeNotifier {
       return 'أدخل رقم التسجيل والرقم السري';
     }
     if (cleanReg == leaderReg && password == leaderPassword) {
+      await _prefs?.setBool(_kGuestMode, false);
       await _prefs?.setString(_kSession, cleanReg);
       notifyListeners();
       return null;
@@ -749,7 +765,8 @@ class MemberStore extends ChangeNotifier {
     for (final m in _members) {
       if (m.regNumber == cleanReg) {
         if (m.password == password) {
-          await _prefs?.setString(_kSession, cleanReg);
+          await _prefs?.setBool(_kGuestMode, false);
+      await _prefs?.setString(_kSession, cleanReg);
           notifyListeners();
           return null;
         }
@@ -761,6 +778,7 @@ class MemberStore extends ChangeNotifier {
 
   Future<void> logout() async {
     await _prefs?.remove(_kSession);
+    await _prefs?.setBool(_kGuestMode, false);
     notifyListeners();
   }
 

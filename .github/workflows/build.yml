@@ -50,6 +50,10 @@ jobs:
           CHAT_LEADER_REG: ${{ secrets.LEADER_REG_B64 }}
           CHAT_LEADER_PASS: ${{ secrets.LEADER_PASS_B64 }}
           CHAT_MEDIA_SECRET: ${{ secrets.CHAT_MEDIA_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          EMAIL_WEBHOOK_URL: ${{ secrets.EMAIL_WEBHOOK_URL }}
         run: |
           if [ -z "$CF_TOKEN" ]; then echo "::notice::تم تخطي نشر Worker"; exit 0; fi
           cd cloudflare
@@ -63,7 +67,7 @@ jobs:
               {"type": "secret_text", "name": "SYNC_KEY", "text": sys.argv[1]},
             ],
           }
-          for name in ("CHAT_LEADER_REG", "CHAT_LEADER_PASS", "CHAT_MEDIA_SECRET"):
+          for name in ("CHAT_LEADER_REG", "CHAT_LEADER_PASS", "CHAT_MEDIA_SECRET", "RESEND_API_KEY", "BREVO_API_KEY", "MAIL_FROM", "EMAIL_WEBHOOK_URL"):
             value = os.environ.get(name, "")
             if value: meta["bindings"].append({"type": "secret_text", "name": name, "text": value})
           firebase = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
@@ -311,16 +315,16 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.15.1
-          name: EPC App v1.15.1 — نادي رواد الاقتصاد
+          tag_name: v1.16.0
+          name: EPC App v1.16.0 — بوابة الضيوف ونشاطات النادي والأفكار
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.15.1 — تحسين استقرار الصور
+            ### الإصدار 1.16.0 — بوابة الضيوف، نشاطات النادي المصورة، طلبات الانضمام، والأفكار بالتصويت
 
-            تحسين ثبات صور الأعضاء وصور المحادثة أثناء التحديث والمزامنة.
+            إطلاق وضع الضيوف، معرض نشاطات النادي (صور وفيديو بإعجاب وتعليق ومشاركة)، نموذج طلب الانضمام مع إشعار البريد عند القبول/الرفض، وقسم الأفكار والمشاريع بالتصويت للأعضاء.
 
-            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.15.1/EPC-Club-1.15.1-compatible.apk)
-            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.15.1/EPC-Club-1.15.1-universal.apk)
+            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.16.0/EPC-Club-1.16.0-compatible.apk)
+            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.16.0/EPC-Club-1.16.0-universal.apk)
             - [تطبيق الويب](https://epc-club.pages.dev)
 
           files: |

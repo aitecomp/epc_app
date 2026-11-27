@@ -41,52 +41,50 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/gate', (_) => false);
   }
 
+  Future<void> _enterAsGuest() async {
+    await MemberStore.instance.enterGuestMode();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/gate', (_) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: kSystemUiOnDark,
       child: Scaffold(
-      backgroundColor: AppColors.plum,
-      body: Stack(
-        children: [
-          const _AuroraBackground(),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Column(
-                    children: [
-                      _brand(),
-                      const SizedBox(height: 26),
-                      _form(),
-                      const SizedBox(height: 22),
-                      Text(
-                        'الدخول متاح للأعضاء المسجَّلين في النادي فقط.\nللاستفسار تواصل مع قائد النادي.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55),
-                          fontSize: 12,
-                          height: 1.7,
+        backgroundColor: AppColors.plum,
+        body: Stack(
+          children: [
+            const _AuroraBackground(),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Column(
+                      children: [
+                        FadeSlideIn(child: _brand()),
+                        const SizedBox(height: 24),
+                        FadeSlideIn(delayMs: 90, child: _form()),
+                        const SizedBox(height: 16),
+                        FadeSlideIn(delayMs: 170, child: _guestPortalCard()),
+                        const SizedBox(height: 16),
+                        Text(
+                          '© 2026 نادي رواد الاقتصاد — EPC',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.42),
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        '© 2026 نادي رواد الاقتصاد — EPC',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.38),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -95,8 +93,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 104,
-          height: 104,
+          width: 98,
+          height: 98,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -108,11 +106,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 offset: const Offset(0, 12),
               ),
             ],
-            border: Border.all(color: AppColors.gold.withValues(alpha: 0.7), width: 2),
+            border: Border.all(color: AppColors.gold.withValues(alpha: 0.75), width: 2),
           ),
           child: ClipOval(child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         const Text(
           'نادي رواد الاقتصاد',
           style: TextStyle(
@@ -132,13 +130,13 @@ class _LoginScreenState extends State<LoginScreen> {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 12),
-        const GoldRule(width: 62),
         const SizedBox(height: 10),
+        const GoldRule(width: 62),
+        const SizedBox(height: 8),
         Text(
           'Learn  •  Innovate  •  Lead  •  Succeed',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: Colors.white.withValues(alpha: 0.62),
             fontSize: 11,
             letterSpacing: 0.6,
           ),
@@ -149,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _form() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),
@@ -166,18 +164,24 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'تسجيل الدخول',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+            const Row(
+              children: [
+                Icon(Icons.verified_user_outlined, color: AppColors.purple, size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'بوابة أعضاء النادي',
+                  style: TextStyle(fontSize: 18.5, fontWeight: FontWeight.w800),
+                ),
+              ],
             ),
             const SizedBox(height: 3),
             const Text(
-              'استخدم بيانات العضوية الخاصة بك',
-              style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+              'سجّل دخولك للوصول إلى الدردشة، الأفكار، والفعاليات',
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             const _Label('رقم التسجيل'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             TextFormField(
               controller: _regCtrl,
               keyboardType: TextInputType.number,
@@ -191,9 +195,9 @@ class _LoginScreenState extends State<LoginScreen> {
               onFieldSubmitted: (_) => _passFocus.requestFocus(),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'أدخل رقم التسجيل' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             const _Label('الرقم السري'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             TextFormField(
               controller: _passCtrl,
               focusNode: _passFocus,
@@ -215,15 +219,63 @@ class _LoginScreenState extends State<LoginScreen> {
               onFieldSubmitted: (_) => _submit(),
               validator: (v) => (v == null || v.isEmpty) ? 'أدخل الرقم السري' : null,
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
             PrimaryButton(
-              label: 'دخول',
+              label: 'دخول الأعضاء',
               icon: Icons.login,
               loading: _loading,
               onPressed: _submit,
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _guestPortalCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.public_rounded, color: AppColors.goldSoft, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'لست عضواً بعد؟ استكشف نشاطات النادي كضيف',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'تصفّح صور وفيديوهات نشاطاتنا وقدّم طلب الانضمام ليصلك الرد عبر البريد الإلكتروني.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 11.5,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          PrimaryButton(
+            label: 'الدخول كضيف وطلب الانضمام',
+            icon: Icons.explore_outlined,
+            gold: true,
+            onPressed: _enterAsGuest,
+          ),
+        ],
       ),
     );
   }
@@ -255,7 +307,7 @@ class _AuroraBackground extends StatelessWidget {
         Positioned(
           bottom: -140,
           left: -100,
-          child: _glow(320, AppColors.gold.withValues(alpha: 0.20)),
+          child: _glow(320, AppColors.gold.withValues(alpha: 0.22)),
         ),
       ],
     );

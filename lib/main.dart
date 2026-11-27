@@ -11,6 +11,7 @@ import 'core/notifications.dart';
 import 'core/push_notifications.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
+import 'screens/guest_shell.dart';
 import 'screens/leader_shell.dart';
 import 'screens/activity_detail_screen.dart';
 import 'screens/login_screen.dart';
@@ -145,6 +146,9 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
     }
     final reg = _store.sessionReg;
     if (reg == null) {
+      if (_store.isGuestSession) {
+        return GuestShell(store: _store, onExitGuest: () => _store.exitGuestMode());
+      }
       return const LoginScreen();
     }
     if (_store.isLeaderSession) {

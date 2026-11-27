@@ -33,7 +33,7 @@ class GlassNavBar extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(18, 0, 18, safeBottom > 0 ? safeBottom : kFloatingNavGap),
+      padding: EdgeInsets.fromLTRB(12, 0, 12, safeBottom > 0 ? safeBottom : kFloatingNavGap),
       child: Container(
         height: kFloatingNavHeight,
         decoration: BoxDecoration(
@@ -137,14 +137,18 @@ class _NavButton extends StatelessWidget {
                 curve: Curves.easeOutCubic,
                 child: active
                     ? Padding(
-                        padding: const EdgeInsets.only(right: 7),
-                        child: Text(
-                          item.label,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                        padding: const EdgeInsets.only(right: 5),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 68),
+                          child: Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       )

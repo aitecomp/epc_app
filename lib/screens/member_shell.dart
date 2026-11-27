@@ -10,9 +10,11 @@ import '../core/theme.dart';
 import '../widgets/glass_nav.dart';
 import 'activities_tab.dart';
 import 'chat_screen.dart';
+import 'club_feed_tab.dart';
+import 'ideas_tab.dart';
 import 'profile_screen.dart';
 
-/// واجهة العضو: الرئيسية (النشاطات) + البروفيل (البطاقة)
+/// واجهة العضو: الفعاليات (مع المنبهات) + نشاطات النادي + الأفكار والمشاريع بالتصويت + الدردشة + البروفيل
 class MemberShell extends StatefulWidget {
   final MemberStore store;
   final Member member;
@@ -38,7 +40,9 @@ class _MemberShellState extends State<MemberShell> {
     super.initState();
     ChatUnread.count.addListener(_chatChanged);
     ChatUnread.openRequested.addListener(_openChatFromNotification);
-    _clockTimer = Timer.periodic(const Duration(seconds: 15), (_) { if (mounted) setState(() {}); });
+    _clockTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted) setState(() {});
+    });
     widget.store.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ActivityNotifier.scheduleUpcoming(widget.store);
@@ -58,8 +62,13 @@ class _MemberShellState extends State<MemberShell> {
     if (mounted) setState(() {});
   }
 
-  void _chatChanged() { if (mounted) setState(() {}); }
-  void _openChatFromNotification() { if (mounted) setState(() => _index = 1); }
+  void _chatChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _openChatFromNotification() {
+    if (mounted) setState(() => _index = 3);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,43 +78,63 @@ class _MemberShellState extends State<MemberShell> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: kSystemUiOnLight,
       child: Scaffold(
-      extendBody: true,
-      backgroundColor: AppColors.cream,
-      body: IndexedStack(
-        index: _index,
-        children: [
-          ActivitiesTab(
-            store: widget.store,
-            isLeader: false,
-            memberName: member.fullName,
-            onOpenProfile: () => setState(() => _index = 2),
-          ),
-          ChatScreen(store: widget.store, isActive: _index == 1),
-          ProfileScreen(member: member, onLogout: widget.onLogout),
-        ],
-      ),
-      bottomNavigationBar: GlassNavBar(
-        index: _index,
-        onTap: (i) => setState(() => _index = i),
-        items: [
-          GlassNavItem(
-            icon: Icons.home_outlined,
-            activeIcon: Icons.home_rounded,
-            label: unseen > 0 ? 'الرئيسية • $unseen' : 'الرئيسية',
-          ),
-          GlassNavItem(
-            badge: ChatUnread.count.value, messenger: true,
-            icon: Icons.forum_outlined,
-            activeIcon: Icons.forum_rounded,
-            label: 'الدردشة',
-          ),
-          const GlassNavItem(
-            icon: Icons.person_outline,
-            activeIcon: Icons.person_rounded,
-            label: 'البروفيل',
-          ),
-        ],
-      ),
+        extendBody: true,
+        backgroundColor: AppColors.cream,
+        body: IndexedStack(
+          index: _index,
+          children: [
+            ActivitiesTab(
+              store: widget.store,
+              isLeader: false,
+              memberName: member.fullName,
+              onOpenProfile: () => setState(() => _index = 4),
+            ),
+            ClubFeedTab(
+              store: widget.store,
+              isLeader: false,
+            ),
+            IdeasTab(
+              store: widget.store,
+              isLeader: false,
+            ),
+            ChatScreen(store: widget.store, isActive: _index == 3),
+            ProfileScreen(member: member, onLogout: widget.onLogout),
+          ],
+        ),
+        bottomNavigationBar: GlassNavBar(
+          index: _index,
+          onTap: (i) => setState(() => _index = i),
+          items: [
+            GlassNavItem(
+              badge: unseen,
+              icon: Icons.event_note_outlined,
+              activeIcon: Icons.event_note_rounded,
+              label: 'الفعاليات',
+            ),
+            const GlassNavItem(
+              icon: Icons.photo_library_outlined,
+              activeIcon: Icons.photo_library_rounded,
+              label: 'النادي',
+            ),
+            const GlassNavItem(
+              icon: Icons.tips_and_updates_outlined,
+              activeIcon: Icons.tips_and_updates_rounded,
+              label: 'الأفكار',
+            ),
+            GlassNavItem(
+              badge: ChatUnread.count.value,
+              messenger: true,
+              icon: Icons.forum_outlined,
+              activeIcon: Icons.forum_rounded,
+              label: 'الدردشة',
+            ),
+            const GlassNavItem(
+              icon: Icons.person_outline,
+              activeIcon: Icons.person_rounded,
+              label: 'البروفيل',
+            ),
+          ],
+        ),
       ),
     );
   }

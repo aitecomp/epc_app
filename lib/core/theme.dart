@@ -386,3 +386,125 @@ const SystemUiOverlayStyle kSystemUiOnLight = SystemUiOverlayStyle(
   systemNavigationBarIconBrightness: Brightness.dark,
   systemNavigationBarContrastEnforced: false,
 );
+
+// ── حركات وأنيميشن سلسة للبطاقات والتفاعل ────────────────────────────────
+class FadeSlideIn extends StatefulWidget {
+  final Widget child;
+  final int delayMs;
+  final double offsetY;
+  const FadeSlideIn({super.key, required this.child, this.delayMs = 0, this.offsetY = 18});
+
+  @override
+  State<FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _slide = Tween<Offset>(begin: Offset(0, widget.offsetY / 100), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    if (widget.delayMs <= 0) {
+      _ctrl.forward();
+    } else {
+      Future<void>.delayed(Duration(milliseconds: widget.delayMs), () {
+        if (mounted) _ctrl.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
+
+class BouncyIconButton extends StatefulWidget {
+  final bool active;
+  final IconData activeIcon;
+  final IconData inactiveIcon;
+  final Color activeColor;
+  final Color inactiveColor;
+  final String label;
+  final VoidCallback onTap;
+
+  const BouncyIconButton({
+    super.key,
+    required this.active,
+    required this.activeIcon,
+    required this.inactiveIcon,
+    required this.activeColor,
+    this.inactiveColor = AppColors.muted,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  State<BouncyIconButton> createState() => _BouncyIconButtonState();
+}
+
+class _BouncyIconButtonState extends State<BouncyIconButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.32), weight: 45),
+      TweenSequenceItem(tween: Tween(begin: 1.32, end: 0.92), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.92, end: 1.0), weight: 30),
+    ]).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.active ? widget.activeColor : widget.inactiveColor;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        _ctrl.forward(from: 0);
+        widget.onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _scale,
+              child: Icon(widget.active ? widget.activeIcon : widget.inactiveIcon, size: 21, color: color),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              widget.label,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

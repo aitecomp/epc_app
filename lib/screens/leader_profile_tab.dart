@@ -6,6 +6,8 @@ import '../widgets/member_card.dart';
 
 class LeaderProfileTab extends StatelessWidget {
   final MemberStore store;
+  final int pendingJoinCount;
+  final VoidCallback? onOpenJoinRequests;
   final VoidCallback onEditProfile;
   final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
@@ -14,6 +16,8 @@ class LeaderProfileTab extends StatelessWidget {
   const LeaderProfileTab({
     super.key,
     required this.store,
+    this.pendingJoinCount = 0,
+    this.onOpenJoinRequests,
     required this.onEditProfile,
     required this.onOpenSettings,
     required this.onLogout,
@@ -107,9 +111,20 @@ class LeaderProfileTab extends StatelessWidget {
               MemberCardFlip(member: leader),
               const SizedBox(height: 20),
               SectionCard(
-                title: 'إدارة الحساب',
+                title: 'إدارة الحساب والنادي',
                 child: Column(
                   children: [
+                    if (onOpenJoinRequests != null)
+                      _tile(
+                        icon: Icons.how_to_reg_rounded,
+                        title: 'طلبات الانضمام للنادي',
+                        subtitle: pendingJoinCount > 0
+                            ? 'لديك $pendingJoinCount طلبات جديدة بانتظار قرارك'
+                            : 'مراجعة وقبول أو رفض طلبات العضوية',
+                        color: AppColors.gold,
+                        badge: pendingJoinCount,
+                        onTap: onOpenJoinRequests!,
+                      ),
                     if (onOpenDashboard != null)
                       _tile(
                         icon: Icons.dashboard_customize_outlined,
@@ -153,6 +168,7 @@ class LeaderProfileTab extends StatelessWidget {
     required String subtitle,
     required VoidCallback onTap,
     Color? color,
+    int badge = 0,
     bool last = false,
   }) {
     final tint = color ?? AppColors.purple;
@@ -170,7 +186,7 @@ class LeaderProfileTab extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: tint.withValues(alpha: 0.10),
+                color: tint.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(11),
               ),
               child: Icon(icon, size: 18, color: tint),
@@ -188,6 +204,21 @@ class LeaderProfileTab extends StatelessWidget {
                 ],
               ),
             ),
+            if (badge > 0) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFB91C1C),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$badge',
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             const Icon(Icons.chevron_left, size: 20, color: AppColors.muted),
           ],
         ),
