@@ -36,6 +36,23 @@ class PostComment {
       );
 }
 
+class PostMediaItem {
+  final String id;
+  final String type;
+  final String url;
+
+  const PostMediaItem({required this.id, required this.type, required this.url});
+
+  bool get isVideo => type.toLowerCase().startsWith('video/');
+  bool get isImage => url.isNotEmpty && !isVideo;
+
+  factory PostMediaItem.fromJson(Map<String, dynamic> j) => PostMediaItem(
+        id: (j['id'] ?? '').toString(),
+        type: (j['type'] ?? 'image/jpeg').toString(),
+        url: (j['url'] ?? '').toString(),
+      );
+}
+
 class ClubPost {
   final String id;
   final String title;
@@ -45,6 +62,7 @@ class ClubPost {
   final String mediaId;
   final String mediaType;
   final String mediaUrl;
+  final List<PostMediaItem> mediaItems;
   final String authorId;
   final String authorName;
   final DateTime createdAt;
@@ -63,6 +81,7 @@ class ClubPost {
     required this.mediaId,
     required this.mediaType,
     required this.mediaUrl,
+    required this.mediaItems,
     required this.authorId,
     required this.authorName,
     required this.createdAt,
@@ -73,24 +92,38 @@ class ClubPost {
     required this.sharesCount,
   });
 
-  bool get isVideo => mediaType.toLowerCase().startsWith('video/');
-  bool get isImage => mediaUrl.isNotEmpty && !isVideo;
-  bool get hasMedia => mediaUrl.isNotEmpty;
+  bool get isVideo => mediaItems.isNotEmpty ? mediaItems.first.isVideo : mediaType.toLowerCase().startsWith('video/');
+  bool get isImage => mediaItems.isNotEmpty ? mediaItems.first.isImage : (mediaUrl.isNotEmpty && !isVideo);
+  bool get hasMedia => mediaItems.isNotEmpty || mediaUrl.isNotEmpty;
 
   factory ClubPost.fromJson(Map<String, dynamic> j) {
     final rawComments = (j['comments'] as List? ?? const [])
         .whereType<Map>()
         .map((c) => PostComment.fromJson(Map<String, dynamic>.from(c)))
         .toList();
+    final parsedItems = (j['mediaItems'] as List? ?? const [])
+        .whereType<Map>()
+        .map((m) => PostMediaItem.fromJson(Map<String, dynamic>.from(m)))
+        .where((m) => m.url.isNotEmpty)
+        .toList();
+    final singleUrl = (j['mediaUrl'] ?? '').toString();
+    final singleId = (j['mediaId'] ?? '').toString();
+    final singleType = (j['mediaType'] ?? '').toString();
+    final items = parsedItems.isNotEmpty
+        ? parsedItems
+        : (singleUrl.isNotEmpty
+            ? [PostMediaItem(id: singleId, type: singleType.isEmpty ? 'image/jpeg' : singleType, url: singleUrl)]
+            : const <PostMediaItem>[]);
     return ClubPost(
       id: (j['id'] ?? '').toString(),
       title: (j['title'] ?? '').toString(),
       caption: (j['caption'] ?? '').toString(),
       category: (j['category'] ?? 'فعالية').toString(),
       location: (j['location'] ?? '').toString(),
-      mediaId: (j['mediaId'] ?? '').toString(),
-      mediaType: (j['mediaType'] ?? '').toString(),
-      mediaUrl: (j['mediaUrl'] ?? '').toString(),
+      mediaId: singleId,
+      mediaType: singleType,
+      mediaUrl: singleUrl,
+      mediaItems: items,
       authorId: (j['authorId'] ?? '').toString(),
       authorName: (j['authorName'] ?? 'قائد النادي').toString(),
       createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal() ?? DateTime.now(),
@@ -382,6 +415,7 @@ class ClubApi {
     String location = '',
     String mediaId = '',
     String mediaType = '',
+    List<Map<String, String>> mediaItems = const [],
   }) async {
     final h = await _headers();
     final res = _parse(await http
@@ -395,6 +429,7 @@ class ClubApi {
             'location': location,
             'mediaId': mediaId,
             'mediaType': mediaType,
+            if (mediaItems.isNotEmpty) 'mediaItems': mediaItems,
           }),
         )
         .timeout(const Duration(seconds: 25))) as Map;

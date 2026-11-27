@@ -332,15 +332,24 @@ async function feedHandler(request, env, url) {
     const caption = typeof data.caption === 'string' ? data.caption.trim().slice(0, 4000) : '';
     const category = typeof data.category === 'string' && data.category.trim() ? data.category.trim().slice(0, 40) : 'فعالية';
     const location = typeof data.location === 'string' ? data.location.trim().slice(0, 120) : '';
-    const mediaId = typeof data.mediaId === 'string' && chatIdPattern.test(data.mediaId) ? data.mediaId : '';
-    const explicitMediaType = typeof data.mediaType === 'string' ? data.mediaType.trim().slice(0, 80) : '';
-    if (!title && !caption && !mediaId) return json({ error: 'empty post' }, 400);
-    let mediaType = explicitMediaType;
-    if (mediaId) {
-      const obj = await env.EPC_BUCKET.head(`feed/media/${mediaId}`);
-      if (!obj) return json({ error: 'invalid media' }, 400);
-      mediaType = obj.httpMetadata?.contentType || explicitMediaType || 'image/jpeg';
+    const rawItems = Array.isArray(data.mediaItems) ? data.mediaItems.slice(0, 10) : [];
+    const mediaItems = [];
+    for (const item of rawItems) {
+      if (!item || typeof item.id !== 'string' || !chatIdPattern.test(item.id)) continue;
+      const obj = await env.EPC_BUCKET.head(`feed/media/${item.id}`);
+      if (!obj) continue;
+      const mType = obj.httpMetadata?.contentType || (typeof item.type === 'string' ? item.type : 'image/jpeg');
+      mediaItems.push({ id: item.id, type: mType });
     }
+    const singleId = typeof data.mediaId === 'string' && chatIdPattern.test(data.mediaId) ? data.mediaId : '';
+    const explicitMediaType = typeof data.mediaType === 'string' ? data.mediaType.trim().slice(0, 80) : '';
+    if (mediaItems.length === 0 && singleId) {
+      const obj = await env.EPC_BUCKET.head(`feed/media/${singleId}`);
+      if (!obj) return json({ error: 'invalid media' }, 400);
+      mediaItems.push({ id: singleId, type: obj.httpMetadata?.contentType || explicitMediaType || 'image/jpeg' });
+    }
+    if (!title && !caption && mediaItems.length === 0) return json({ error: 'empty post' }, 400);
+    const firstMedia = mediaItems[0] || null;
     const id = `${Date.now().toString().padStart(13, '0')}_${crypto.randomUUID()}`;
     const post = {
       id,
@@ -348,8 +357,9 @@ async function feedHandler(request, env, url) {
       caption,
       category,
       location,
-      mediaId,
-      mediaType,
+      mediaId: firstMedia ? firstMedia.id : '',
+      mediaType: firstMedia ? firstMedia.type : '',
+      mediaItems,
       authorId: actor.id,
       authorName: actor.name,
       likes: [],
@@ -362,7 +372,8 @@ async function feedHandler(request, env, url) {
       ok: true,
       post: {
         ...post,
-        mediaUrl: mediaId ? `${url.origin}/feed/media/${encodeURIComponent(mediaId)}` : '',
+        mediaUrl: firstMedia ? `${url.origin}/feed/media/${encodeURIComponent(firstMedia.id)}` : '',
+        mediaItems: mediaItems.map(m => ({ ...m, url: `${url.origin}/feed/media/${encodeURIComponent(m.id)}` })),
         likesCount: 0,
         likedByMe: false,
         commentsCount: 0,
@@ -389,15 +400,23 @@ async function feedHandler(request, env, url) {
         const meta = await env.EPC_BUCKET.head(`feed/media/${p.mediaId}`);
         mType = meta?.httpMetadata?.contentType || 'image/jpeg';
       }
+      const rawList = Array.isArray(p.mediaItems) && p.mediaItems.length > 0
+        ? p.mediaItems
+        : (p.mediaId ? [{ id: p.mediaId, type: mType || 'image/jpeg' }] : []);
+      const mediaItems = rawList
+        .filter(m => m && typeof m.id === 'string' && m.id)
+        .map(m => ({ id: m.id, type: m.type || 'image/jpeg', url: `${url.origin}/feed/media/${encodeURIComponent(m.id)}` }));
+      const first = mediaItems[0] || null;
       return {
         id: p.id,
         title: p.title || '',
         caption: p.caption || '',
         category: p.category || 'فعالية',
         location: p.location || '',
-        mediaId: p.mediaId || '',
-        mediaType: mType,
-        mediaUrl: p.mediaId ? `${url.origin}/feed/media/${encodeURIComponent(p.mediaId)}` : '',
+        mediaId: first ? first.id : '',
+        mediaType: first ? first.type : '',
+        mediaUrl: first ? first.url : '',
+        mediaItems,
         authorId: p.authorId || '',
         authorName: p.authorName || 'قائد النادي',
         createdAt: p.createdAt,
@@ -420,8 +439,15 @@ async function feedHandler(request, env, url) {
     if (!obj) return json({ ok: true });
     const post = await obj.json();
     await env.EPC_BUCKET.delete(`feed/posts/${id}`);
-    if (post.mediaId && chatIdPattern.test(post.mediaId)) {
-      await env.EPC_BUCKET.delete(`feed/media/${post.mediaId}`);
+    const toDelete = new Set();
+    if (post.mediaId && chatIdPattern.test(post.mediaId)) toDelete.add(post.mediaId);
+    if (Array.isArray(post.mediaItems)) {
+      for (const m of post.mediaItems) {
+        if (m && typeof m.id === 'string' && chatIdPattern.test(m.id)) toDelete.add(m.id);
+      }
+    }
+    for (const mid of toDelete) {
+      await env.EPC_BUCKET.delete(`feed/media/${mid}`);
     }
     return json({ ok: true });
   }

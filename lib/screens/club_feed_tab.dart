@@ -26,7 +26,7 @@ const List<String> kFeedCategories = [
   'إعلان',
 ];
 
-/// فرع نشاطات النادي المصوّرة (صور وفيديوهات)
+/// فرع نشاطات النادي المصوّرة (صور متعددة وفيديوهات)
 /// القائد فقط ينشر ويحذف، والأعضاء والضيوف يشاهدون ويتفاعلون (قلب، تعليق، مشاركة)
 class ClubFeedTab extends StatefulWidget {
   final MemberStore store;
@@ -91,7 +91,10 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
         : _posts.where((p) => p.category == _selectedCategory).toList();
     if (_activeHashtag != null && _activeHashtag!.isNotEmpty) {
       final tag = _activeHashtag!.toLowerCase();
-      list = list.where((p) => p.caption.toLowerCase().contains(tag) || p.title.toLowerCase().contains(tag)).toList();
+      list = list
+          .where((p) =>
+              p.caption.toLowerCase().contains(tag) || p.title.toLowerCase().contains(tag))
+          .toList();
     }
     return list;
   }
@@ -294,7 +297,7 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
               children: [
                 if (widget.isLeader) ...[
                   PrimaryButton(
-                    label: 'نشر منشور نشاط جديد (صورة / فيديو)',
+                    label: 'نشر منشور نشاط جديد (صور متعددة / فيديو)',
                     icon: Icons.add_photo_alternate_outlined,
                     gold: true,
                     onPressed: _openComposer,
@@ -328,7 +331,7 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
                     icon: Icons.photo_library_outlined,
                     title: 'لا توجد منشورات بعد',
                     subtitle: widget.isLeader
-                        ? 'انشر أول تغطية مصورة أو فيديو لنشاطات النادي لتظهر للأعضاء والضيوف.'
+                        ? 'انشر أول تغطية مصورة أو ألبوم صور أو فيديو لنشاطات النادي.'
                         : 'ستظهر هنا صور وفيديوهات نشاطات النادي فور نشرها من القائد.',
                   )
                 else
@@ -377,9 +380,7 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.gold.withValues(alpha: 0.75)),
             ),
-            child: ClipOval(
-              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-            ),
+            child: ClipOval(child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -388,11 +389,7 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
               children: [
                 const Text(
                   'نشاطات النادي',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
                 ),
                 Text(
                   widget.isGuest ? 'بوابة الضيوف • معرض النادي' : 'صور وفيديوهات نادي رواد الاقتصاد',
@@ -458,14 +455,10 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'انضم لنادي رواد الاقتصاد',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  'قدّم طلبك للوصول للدردشة والاستطلاعات والفعاليات.',
-                  style: TextStyle(fontSize: 11, color: AppColors.muted),
-                ),
+                Text('انضم لنادي رواد الاقتصاد',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                Text('قدّم طلبك للوصول للدردشة والاستطلاعات والفعاليات.',
+                    style: TextStyle(fontSize: 11, color: AppColors.muted)),
               ],
             ),
           ),
@@ -554,6 +547,7 @@ class _ClubPostCard extends StatefulWidget {
 class _ClubPostCardState extends State<_ClubPostCard> {
   bool _showBurst = false;
   int _imgRetry = 0;
+  int _carouselIndex = 0;
 
   void _handleDoubleTap() {
     if (!widget.post.likedByMe) widget.onLike();
@@ -563,10 +557,78 @@ class _ClubPostCardState extends State<_ClubPostCard> {
     });
   }
 
+  void _openAuthorProfile(Member author) {
+    if (widget.store.sessionReg == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
+    );
+  }
+
+  Widget _buildSingleMedia(PostMediaItem item, List<PostMediaItem> allImages, int imageIdx) {
+    if (item.isVideo) {
+      return _FeedVideoPlayer(url: item.url);
+    }
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _FullGalleryViewer(
+            images: allImages,
+            initialIndex: imageIdx,
+            title: widget.post.title,
+          ),
+        ),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 360, minHeight: 160),
+        child: Image.network(
+          '${item.url}${_imgRetry > 0 ? '?r=$_imgRetry' : ''}',
+          key: ValueKey('${item.id}_$_imgRetry'),
+          width: double.infinity,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            final pct = progress.expectedTotalBytes != null && progress.expectedTotalBytes! > 0
+                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                : null;
+            return Container(
+              height: 210,
+              color: AppColors.softViolet,
+              child: Center(
+                child: CircularProgressIndicator(
+                    value: pct, strokeWidth: 2.4, color: AppColors.purple),
+              ),
+            );
+          },
+          errorBuilder: (_, __, ___) => Container(
+            height: 160,
+            color: AppColors.softViolet,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.broken_image_outlined, size: 32, color: AppColors.muted),
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _imgRetry++),
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('إعادة تحميل الصورة', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
     final author = findMemberByReg(widget.store, post.authorId) ?? widget.store.leaderMember;
+    final media = post.mediaItems;
+    final imageItems = media.where((m) => m.isImage).toList();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
@@ -588,83 +650,73 @@ class _ClubPostCardState extends State<_ClubPostCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── رأس المنشور مع صورة واسم القائد ──
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: widget.store.sessionReg != null
-                          ? () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
-                              )
-                          : null,
+                      onTap: () => _openAuthorProfile(author),
                       child: MemberAvatar(member: author, size: 36),
                     ),
                     const SizedBox(width: 9),
                     Expanded(
                       child: GestureDetector(
-                        onTap: widget.store.sessionReg != null
-                            ? () => Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
-                                )
-                            : null,
+                        onTap: () => _openAuthorProfile(author),
                         child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  post.authorName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.goldGradient,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Text(
-                                  'القائد',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.plum,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 1),
-                          Row(
-                            children: [
-                              Text(
-                                relativeTimeAr(post.createdAt),
-                                style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
-                              ),
-                              if (post.location.isNotEmpty) ...[
-                                const Text(' • ',
-                                    style: TextStyle(color: AppColors.muted, fontSize: 10.5)),
-                                const Icon(Icons.place_outlined, size: 11, color: AppColors.muted),
-                                const SizedBox(width: 2),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
                                 Flexible(
                                   child: Text(
-                                    post.location,
+                                    post.authorName,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.goldGradient,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    'القائد',
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.plum),
                                   ),
                                 ),
                               ],
-                            ],
-                          ),
-                        ],
-                      ),
+                            ),
+                            const SizedBox(height: 1),
+                            Row(
+                              children: [
+                                Text(
+                                  relativeTimeAr(post.createdAt),
+                                  style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+                                ),
+                                if (post.location.isNotEmpty) ...[
+                                  const Text(' • ',
+                                      style: TextStyle(color: AppColors.muted, fontSize: 10.5)),
+                                  const Icon(Icons.place_outlined, size: 11, color: AppColors.muted),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    child: Text(
+                                      post.location,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     ChipTag(text: post.category, color: AppColors.purple),
@@ -678,7 +730,6 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                   ],
                 ),
               ),
-
               if (post.title.isNotEmpty || post.caption.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
@@ -689,10 +740,7 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                         Text(
                           post.title,
                           style: const TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.ink,
-                          ),
+                              fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink),
                         ),
                       if (post.title.isNotEmpty && post.caption.isNotEmpty)
                         const SizedBox(height: 4),
@@ -703,110 +751,103 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                           allowProfileNavigation: widget.store.sessionReg != null,
                           onHashtagTap: widget.onHashtagTap,
                           style: const TextStyle(
-                            fontSize: 13,
-                            height: 1.55,
-                            color: Color(0xFF334155),
-                          ),
+                              fontSize: 13, height: 1.55, color: Color(0xFF334155)),
                         ),
                     ],
                   ),
                 ),
 
-              // ── الوسائط (صورة مع تكبير أو فيديو مع مشغّل كامل) ──
-              if (post.hasMedia)
+              // ── وسائط المنشور (صورة/فيديو واحد أو ألبوم منزلق لعدة صور وفيديوهات) ──
+              if (media.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: GestureDetector(
                     onDoubleTap: _handleDoubleTap,
-                    onTap: post.isImage
-                        ? () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => _FullImageViewer(
-                                  url: post.mediaUrl,
-                                  title: post.title,
+                    child: Column(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              if (media.length == 1)
+                                _buildSingleMedia(media.first, imageItems, 0)
+                              else
+                                SizedBox(
+                                  height: 300,
+                                  child: PageView.builder(
+                                    itemCount: media.length,
+                                    onPageChanged: (idx) => setState(() => _carouselIndex = idx),
+                                    itemBuilder: (_, idx) {
+                                      final item = media[idx];
+                                      final imgPos = imageItems.indexWhere((x) => x.id == item.id);
+                                      return _buildSingleMedia(
+                                          item, imageItems, imgPos < 0 ? 0 : imgPos);
+                                    },
+                                  ),
                                 ),
-                              ),
-                            )
-                        : null,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (post.isVideo)
-                            _FeedVideoPlayer(url: post.mediaUrl)
-                          else
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxHeight: 360, minHeight: 150),
-                              child: Image.network(
-                                '${post.mediaUrl}${_imgRetry > 0 ? '?r=$_imgRetry' : ''}',
-                                key: ValueKey('${post.id}_$_imgRetry'),
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                gaplessPlayback: true,
-                                loadingBuilder: (_, child, progress) {
-                                  if (progress == null) return child;
-                                  final pct = progress.expectedTotalBytes != null &&
-                                          progress.expectedTotalBytes! > 0
-                                      ? progress.cumulativeBytesLoaded /
-                                          progress.expectedTotalBytes!
-                                      : null;
-                                  return Container(
-                                    height: 200,
-                                    color: AppColors.softViolet,
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        value: pct,
-                                        strokeWidth: 2.4,
-                                        color: AppColors.purple,
-                                      ),
+                              if (media.length > 1)
+                                Positioned(
+                                  top: 10,
+                                  left: 10,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.circular(14),
                                     ),
-                                  );
-                                },
-                                errorBuilder: (_, __, ___) => Container(
-                                  height: 160,
-                                  color: AppColors.softViolet,
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.broken_image_outlined,
-                                            size: 32, color: AppColors.muted),
-                                        const SizedBox(height: 6),
-                                        TextButton.icon(
-                                          onPressed: () => setState(() => _imgRetry++),
-                                          icon: const Icon(Icons.refresh, size: 16),
-                                          label: const Text('إعادة تحميل الصورة',
-                                              style: TextStyle(fontSize: 12)),
-                                        ),
-                                      ],
+                                    child: Text(
+                                      '${_carouselIndex + 1} / ${media.length}',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800),
                                     ),
                                   ),
                                 ),
+                              AnimatedScale(
+                                scale: _showBurst ? 1.15 : 0.0,
+                                duration: const Duration(milliseconds: 240),
+                                curve: Curves.elasticOut,
+                                child: AnimatedOpacity(
+                                  opacity: _showBurst ? 0.95 : 0.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: const Icon(
+                                    Icons.favorite_rounded,
+                                    size: 78,
+                                    color: Colors.white,
+                                    shadows: [Shadow(color: Colors.black45, blurRadius: 18)],
+                                  ),
+                                ),
                               ),
-                            ),
-                          AnimatedScale(
-                            scale: _showBurst ? 1.15 : 0.0,
-                            duration: const Duration(milliseconds: 240),
-                            curve: Curves.elasticOut,
-                            child: AnimatedOpacity(
-                              opacity: _showBurst ? 0.95 : 0.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: const Icon(
-                                Icons.favorite_rounded,
-                                size: 78,
-                                color: Colors.white,
-                                shadows: [Shadow(color: Colors.black45, blurRadius: 18)],
-                              ),
-                            ),
+                            ],
+                          ),
+                        ),
+                        if (media.length > 1) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (var i = 0; i < media.length; i++)
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                                  width: i == _carouselIndex ? 16 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: i == _carouselIndex ? AppColors.gold : AppColors.line,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
 
-              // ── شريط التفاعل (قلب + تعليق + مشاركة) ──
+              // ── شريط التفاعل ──
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
                 child: Row(
@@ -832,10 +873,9 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                             Text(
                               '${post.commentsCount}',
                               style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.muted,
-                              ),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.muted),
                             ),
                           ],
                         ),
@@ -854,10 +894,9 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                             Text(
                               post.sharesCount > 0 ? 'مشاركة (${post.sharesCount})' : 'مشاركة',
                               style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.purple,
-                              ),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.purple),
                             ),
                           ],
                         ),
@@ -874,10 +913,30 @@ class _ClubPostCardState extends State<_ClubPostCard> {
   }
 }
 
-class _FullImageViewer extends StatelessWidget {
-  final String url;
+class _FullGalleryViewer extends StatefulWidget {
+  final List<PostMediaItem> images;
+  final int initialIndex;
   final String title;
-  const _FullImageViewer({required this.url, required this.title});
+
+  const _FullGalleryViewer({
+    required this.images,
+    required this.initialIndex,
+    required this.title,
+  });
+
+  @override
+  State<_FullGalleryViewer> createState() => _FullGalleryViewerState();
+}
+
+class _FullGalleryViewerState extends State<_FullGalleryViewer> {
+  late final PageController _ctrl = PageController(initialPage: widget.initialIndex);
+  late int _index = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -886,15 +945,24 @@ class _FullImageViewer extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: Text(title.isEmpty ? 'عرض الصورة' : title,
-            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+        title: Text(
+          widget.images.length > 1
+              ? '${_index + 1} / ${widget.images.length}'
+              : (widget.title.isEmpty ? 'عرض الصورة' : widget.title),
+          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+        ),
       ),
       body: SafeArea(
-        child: Center(
-          child: InteractiveViewer(
-            minScale: 0.8,
-            maxScale: 4.0,
-            child: Image.network(url, fit: BoxFit.contain),
+        child: PageView.builder(
+          controller: _ctrl,
+          itemCount: widget.images.length,
+          onPageChanged: (i) => setState(() => _index = i),
+          itemBuilder: (_, i) => Center(
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: Image.network(widget.images[i].url, fit: BoxFit.contain),
+            ),
           ),
         ),
       ),
@@ -1057,6 +1125,22 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer> {
   }
 }
 
+class _PickedMedia {
+  final XFile file;
+  final Uint8List? previewBytes;
+  final int size;
+  final String mime;
+  final bool isVideo;
+
+  const _PickedMedia({
+    required this.file,
+    required this.previewBytes,
+    required this.size,
+    required this.mime,
+    required this.isVideo,
+  });
+}
+
 class _CreatePostSheet extends StatefulWidget {
   final ClubApi api;
   const _CreatePostSheet({required this.api});
@@ -1071,12 +1155,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   final _locationCtrl = TextEditingController();
   final _picker = ImagePicker();
   String _category = 'فعالية';
-  XFile? _mediaFile;
-  Uint8List? _mediaPreviewBytes;
-  int _mediaSize = 0;
-  String _mediaMime = '';
-  String _mediaName = '';
-  bool _isVideo = false;
+  final List<_PickedMedia> _picked = [];
   bool _publishing = false;
   String _statusText = '';
 
@@ -1088,35 +1167,44 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 88);
-    if (file == null) return;
-    final size = await file.length();
-    if (size > ClubApi.maxFeedMediaBytes) {
-      if (mounted) toast(context, 'حجم الصورة يتجاوز 95 ميغابايت', error: true);
-      return;
+  Future<void> _pickImages() async {
+    final files = await _picker.pickMultiImage(imageQuality: 86);
+    if (files.isEmpty) return;
+    for (final file in files) {
+      if (_picked.length >= 10) {
+        if (mounted) toast(context, 'الحد الأقصى 10 صور/فيديوهات لكل منشور');
+        break;
+      }
+      final size = await file.length();
+      if (size > ClubApi.maxFeedMediaBytes) {
+        if (mounted) toast(context, 'تم تخطي صورة تتجاوز 95 ميغابايت', error: true);
+        continue;
+      }
+      final preview = size <= 10 * 1024 * 1024 ? await file.readAsBytes() : null;
+      final lower = file.name.toLowerCase();
+      final mime = lower.endsWith('.png')
+          ? 'image/png'
+          : lower.endsWith('.webp')
+              ? 'image/webp'
+              : lower.endsWith('.gif')
+                  ? 'image/gif'
+                  : 'image/jpeg';
+      _picked.add(_PickedMedia(
+        file: file,
+        previewBytes: preview,
+        size: size,
+        mime: mime,
+        isVideo: false,
+      ));
     }
-    final preview = size <= 12 * 1024 * 1024 ? await file.readAsBytes() : null;
-    final lower = file.name.toLowerCase();
-    final mime = lower.endsWith('.png')
-        ? 'image/png'
-        : lower.endsWith('.webp')
-            ? 'image/webp'
-            : lower.endsWith('.gif')
-                ? 'image/gif'
-                : 'image/jpeg';
-    if (!mounted) return;
-    setState(() {
-      _mediaFile = file;
-      _mediaPreviewBytes = preview;
-      _mediaSize = size;
-      _mediaMime = mime;
-      _mediaName = file.name;
-      _isVideo = false;
-    });
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickVideo() async {
+    if (_picked.length >= 10) {
+      toast(context, 'الحد الأقصى 10 وسائط لكل منشور');
+      return;
+    }
     final file = await _picker.pickVideo(source: ImageSource.gallery);
     if (file == null) return;
     final size = await file.length();
@@ -1132,44 +1220,48 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
             : 'video/mp4';
     if (!mounted) return;
     setState(() {
-      _mediaFile = file;
-      _mediaPreviewBytes = null;
-      _mediaSize = size;
-      _mediaMime = mime;
-      _mediaName = file.name;
-      _isVideo = true;
+      _picked.add(_PickedMedia(
+        file: file,
+        previewBytes: null,
+        size: size,
+        mime: mime,
+        isVideo: true,
+      ));
     });
   }
 
   Future<void> _publish() async {
-    if (_titleCtrl.text.trim().isEmpty && _captionCtrl.text.trim().isEmpty && _mediaFile == null) {
-      toast(context, 'أضف عنواناً أو وصفاً أو صورة/فيديو للنشر', error: true);
+    if (_titleCtrl.text.trim().isEmpty && _captionCtrl.text.trim().isEmpty && _picked.isEmpty) {
+      toast(context, 'أضف عنواناً أو وصفاً أو صوراً/فيديو للنشر', error: true);
       return;
     }
     setState(() {
       _publishing = true;
-      _statusText = _mediaFile != null
-          ? (_isVideo ? 'جاري رفع الفيديو (${(_mediaSize / (1024 * 1024)).toStringAsFixed(1)} MB)...' : 'جاري رفع الصورة...')
-          : 'جاري نشر المنشور...';
+      _statusText = _picked.isNotEmpty ? 'جاري تجهيز رفع الوسائط...' : 'جاري نشر المنشور...';
     });
     try {
-      String mediaId = '';
-      String uploadedType = '';
-      if (_mediaFile != null) {
+      final uploadedItems = <Map<String, String>>[];
+      for (var i = 0; i < _picked.length; i++) {
+        final item = _picked[i];
+        if (mounted) {
+          setState(() {
+            _statusText =
+                'جاري رفع الملف ${i + 1} من ${_picked.length} (${(item.size / (1024 * 1024)).toStringAsFixed(1)} MB)...';
+          });
+        }
         final uploaded = kIsWeb
             ? await widget.api.uploadFeedMedia(
-                await _mediaFile!.readAsBytes(),
-                _mediaMime,
-                isVideo: _isVideo,
+                await item.file.readAsBytes(),
+                item.mime,
+                isVideo: item.isVideo,
               )
             : await widget.api.uploadFeedMediaStream(
-                _mediaFile!.openRead(),
-                _mediaSize,
-                _mediaMime,
-                isVideo: _isVideo,
+                item.file.openRead(),
+                item.size,
+                item.mime,
+                isVideo: item.isVideo,
               );
-        mediaId = uploaded.id;
-        uploadedType = uploaded.type;
+        uploadedItems.add({'id': uploaded.id, 'type': uploaded.type});
       }
       if (mounted) setState(() => _statusText = 'جاري حفظ ونشر المنشور...');
       final post = await widget.api.createPost(
@@ -1177,8 +1269,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
         caption: _captionCtrl.text.trim(),
         category: _category,
         location: _locationCtrl.text.trim(),
-        mediaId: mediaId,
-        mediaType: uploadedType,
+        mediaItems: uploadedItems,
       );
       if (!mounted) return;
       Navigator.pop(context, post);
@@ -1216,7 +1307,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
             const SizedBox(height: 12),
             const Text('نشر نشاط للنادي',
                 style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
-            const Text('يظهر للأعضاء وللضيوف مع الصورة أو الفيديو.',
+            const Text('يمكنك إرفاق حتى 10 صور وفيديوهات، واستخدام #الهاشتاغات والروابط.',
                 style: TextStyle(fontSize: 11.5, color: AppColors.muted)),
             const SizedBox(height: 12),
             Wrap(
@@ -1246,7 +1337,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
             TextField(
               controller: _captionCtrl,
               maxLines: 3,
-              decoration: const InputDecoration(hintText: 'تفاصيل النشاط...'),
+              decoration: const InputDecoration(
+                hintText: 'تفاصيل النشاط (يدعم الروابط و #الهاشتاغات و @المنشن)...',
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -1261,9 +1354,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               children: [
                 Expanded(
                   child: GhostButton(
-                    label: 'إرفاق صورة',
-                    icon: Icons.image_outlined,
-                    onPressed: _publishing ? null : _pickImage,
+                    label: _picked.isEmpty ? 'إرفاق صور' : 'إضافة صور (${_picked.length}/10)',
+                    icon: Icons.collections_outlined,
+                    onPressed: _publishing ? null : _pickImages,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1276,61 +1369,78 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 ),
               ],
             ),
-            if (_mediaFile != null) ...[
+            if (_picked.isNotEmpty) ...[
               const SizedBox(height: 10),
-              if (!_isVideo && _mediaPreviewBytes != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(
-                    _mediaPreviewBytes!,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.softViolet,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(_isVideo ? Icons.video_file_rounded : Icons.photo_rounded,
-                        color: AppColors.purple, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '$_mediaName (${(_mediaSize / (1024 * 1024)).toStringAsFixed(1)} MB)',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.close, size: 16),
-                      onPressed: _publishing
-                          ? null
-                          : () => setState(() {
-                                _mediaFile = null;
-                                _mediaPreviewBytes = null;
-                                _mediaSize = 0;
-                                _mediaMime = '';
-                                _mediaName = '';
-                              }),
-                    ),
-                  ],
+              SizedBox(
+                height: 92,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _picked.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final item = _picked[i];
+                    return Stack(
+                      children: [
+                        Container(
+                          width: 92,
+                          height: 92,
+                          decoration: BoxDecoration(
+                            color: AppColors.softViolet,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.line),
+                          ),
+                          clipBehavior: Clip.hardEdge,
+                          child: (!item.isVideo && item.previewBytes != null)
+                              ? Image.memory(item.previewBytes!, fit: BoxFit.cover)
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      item.isVideo
+                                          ? Icons.videocam_rounded
+                                          : Icons.photo_rounded,
+                                      color: AppColors.purple,
+                                      size: 26,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${(item.size / (1024 * 1024)).toStringAsFixed(1)} MB',
+                                      style: const TextStyle(
+                                          fontSize: 10, fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                        if (!_publishing)
+                          Positioned(
+                            top: 4,
+                            left: 4,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _picked.removeAt(i)),
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 14, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
             if (_publishing && _statusText.isNotEmpty) ...[
               const SizedBox(height: 12),
-              const LinearProgressIndicator(color: AppColors.gold, backgroundColor: AppColors.softViolet),
+              const LinearProgressIndicator(
+                  color: AppColors.gold, backgroundColor: AppColors.softViolet),
               const SizedBox(height: 6),
               Text(_statusText,
-                  style: const TextStyle(fontSize: 12, color: AppColors.purple, fontWeight: FontWeight.w700)),
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.purple, fontWeight: FontWeight.w700)),
             ],
             const SizedBox(height: 14),
             PrimaryButton(
@@ -1506,7 +1616,8 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
                                       ),
                                       const SizedBox(width: 5),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        padding:
+                                            const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                         decoration: BoxDecoration(
                                           color: c.authorRole == 'القائد'
                                               ? AppColors.gold.withValues(alpha: 0.2)
@@ -1533,13 +1644,19 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
                                           onTap: () => _deleteComment(c),
                                           child: const Padding(
                                             padding: EdgeInsets.only(right: 5),
-                                            child: Icon(Icons.close, size: 15, color: AppColors.muted),
+                                            child:
+                                                Icon(Icons.close, size: 15, color: AppColors.muted),
                                           ),
                                         ),
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  RichSmartText(c.text, store: widget.store, allowProfileNavigation: !widget.isGuest, style: const TextStyle(fontSize: 12.5, height: 1.45)),
+                                  RichSmartText(
+                                    c.text,
+                                    store: widget.store,
+                                    allowProfileNavigation: !widget.isGuest,
+                                    style: const TextStyle(fontSize: 12.5, height: 1.45),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1618,7 +1735,8 @@ class _ShareActionTile extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 22),
             const SizedBox(height: 5),
-            Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 12.5)),
+            Text(label,
+                style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 12.5)),
           ],
         ),
       ),

@@ -74,4 +74,11 @@ assert.equal(ideaCreate.idea.agreePercent,100);
 const disagreeVote=await (await leaderReq(`/ideas/${ideaCreate.id}/vote`,'POST',JSON.stringify({choice:'disagree'}),{'content-type':'application/json'})).json();
 assert.equal(disagreeVote.agreeCount,1);assert.equal(disagreeVote.disagreeCount,1);assert.equal(disagreeVote.agreePercent,50);assert.equal(disagreeVote.disagreePercent,50);
 
-console.log('All v1.17.0 Worker tests passed');
+// 5) Multi-photo post test
+const fm2=await (await leaderReq('/feed/media?kind=image','POST',new Uint8Array([137,80,78,71]),{'content-type':'image/png'})).json();
+const multiPostRes=await leaderReq('/feed/posts','POST',JSON.stringify({title:'ألبوم صور',caption:'#EPC',category:'تغطية',mediaItems:[{id:feedMedia.id,type:feedMedia.type},{id:fm2.id,type:fm2.type}]}),{'content-type':'application/json'});
+assert.equal(multiPostRes.status,200);
+const mp=(await multiPostRes.json()).post;
+assert.equal(mp.mediaItems.length,2);
+assert.equal((await worker.fetch(new Request(mp.mediaItems[1].url),env)).status,200);
+console.log('All v1.20.0 Worker tests passed');
