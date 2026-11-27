@@ -325,14 +325,16 @@ class ClubApi {
         .toList();
   }
 
+  static const int maxFeedMediaBytes = 95 * 1024 * 1024; // 95 MB
+
   Future<({String id, String type})> uploadFeedMedia(
     Uint8List bytes,
     String mime, {
     required bool isVideo,
   }) async {
     if (!CloudSync.enabled) throw StateError('المزامنة السحابية غير مفعّلة');
-    if (bytes.isEmpty || bytes.length > 25 * 1024 * 1024) {
-      throw StateError('حجم الملف يتجاوز 25 ميغابايت');
+    if (bytes.isEmpty || bytes.length > maxFeedMediaBytes) {
+      throw StateError('حجم الملف يتجاوز 95 ميغابايت');
     }
     final h = await _headers();
     final kind = isVideo ? 'video' : 'image';
@@ -342,7 +344,34 @@ class ClubApi {
           headers: {...h, 'content-type': mime},
           body: bytes,
         )
-        .timeout(const Duration(seconds: 120))) as Map;
+        .timeout(const Duration(minutes: 5))) as Map;
+    return (id: res['id'].toString(), type: (res['type'] ?? mime).toString());
+  }
+
+  /// رفع ملفات المنشورات الكبيرة بالبث المباشر (حتى 95 ميغابايت)
+  Future<({String id, String type})> uploadFeedMediaStream(
+    Stream<List<int>> stream,
+    int length,
+    String mime, {
+    required bool isVideo,
+  }) async {
+    if (!CloudSync.enabled) throw StateError('المزامنة السحابية غير مفعّلة');
+    if (length <= 0 || length > maxFeedMediaBytes) {
+      throw StateError('حجم الملف يتجاوز 95 ميغابايت');
+    }
+    final h = await _headers();
+    final kind = isVideo ? 'video' : 'image';
+    final req = http.StreamedRequest('POST', _uri('/feed/media?kind=$kind'))
+      ..headers.addAll({...h, 'content-type': mime})
+      ..contentLength = length;
+    final sentFuture = req.send().timeout(const Duration(minutes: 5));
+    await for (final chunk in stream) {
+      req.sink.add(chunk);
+    }
+    await req.sink.close();
+    final streamed = await sentFuture;
+    final response = await http.Response.fromStream(streamed);
+    final res = _parse(response) as Map;
     return (id: res['id'].toString(), type: (res['type'] ?? mime).toString());
   }
 

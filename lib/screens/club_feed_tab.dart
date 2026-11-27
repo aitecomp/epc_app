@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,6 +14,7 @@ import '../core/club_api.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
+import 'chat_member_profile.dart';
 
 const List<String> kFeedCategories = [
   'الكل',
@@ -565,10 +567,23 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                 child: Row(
                   children: [
-                    MemberAvatar(member: author, size: 36),
+                    GestureDetector(
+                      onTap: widget.store.sessionReg != null
+                          ? () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
+                              )
+                          : null,
+                      child: MemberAvatar(member: author, size: 36),
+                    ),
                     const SizedBox(width: 9),
                     Expanded(
-                      child: Column(
+                      child: GestureDetector(
+                        onTap: widget.store.sessionReg != null
+                            ? () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
+                                )
+                            : null,
+                        child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
@@ -1026,7 +1041,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   final _locationCtrl = TextEditingController();
   final _picker = ImagePicker();
   String _category = 'فعالية';
-  Uint8List? _mediaBytes;
+  XFile? _mediaFile;
+  Uint8List? _mediaPreviewBytes;
+  int _mediaSize = 0;
   String _mediaMime = '';
   String _mediaName = '';
   bool _isVideo = false;
@@ -1042,9 +1059,14 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   }
 
   Future<void> _pickImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 84);
+    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 88);
     if (file == null) return;
-    final bytes = await file.readAsBytes();
+    final size = await file.length();
+    if (size > ClubApi.maxFeedMediaBytes) {
+      if (mounted) toast(context, 'حجم الصورة يتجاوز 95 ميغابايت', error: true);
+      return;
+    }
+    final preview = size <= 12 * 1024 * 1024 ? await file.readAsBytes() : null;
     final lower = file.name.toLowerCase();
     final mime = lower.endsWith('.png')
         ? 'image/png'
@@ -1055,7 +1077,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 : 'image/jpeg';
     if (!mounted) return;
     setState(() {
-      _mediaBytes = bytes;
+      _mediaFile = file;
+      _mediaPreviewBytes = preview;
+      _mediaSize = size;
       _mediaMime = mime;
       _mediaName = file.name;
       _isVideo = false;
@@ -1063,11 +1087,11 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   }
 
   Future<void> _pickVideo() async {
-    final file = await _picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 3));
+    final file = await _picker.pickVideo(source: ImageSource.gallery);
     if (file == null) return;
-    final bytes = await file.readAsBytes();
-    if (bytes.length > 25 * 1024 * 1024) {
-      if (mounted) toast(context, 'حجم الفيديو يتجاوز 25 ميغابايت', error: true);
+    final size = await file.length();
+    if (size > ClubApi.maxFeedMediaBytes) {
+      if (mounted) toast(context, 'حجم الفيديو يتجاوز 95 ميغابايت', error: true);
       return;
     }
     final lower = file.name.toLowerCase();
@@ -1078,7 +1102,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
             : 'video/mp4';
     if (!mounted) return;
     setState(() {
-      _mediaBytes = bytes;
+      _mediaFile = file;
+      _mediaPreviewBytes = null;
+      _mediaSize = size;
       _mediaMime = mime;
       _mediaName = file.name;
       _isVideo = true;
@@ -1086,25 +1112,32 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
   }
 
   Future<void> _publish() async {
-    if (_titleCtrl.text.trim().isEmpty && _captionCtrl.text.trim().isEmpty && _mediaBytes == null) {
+    if (_titleCtrl.text.trim().isEmpty && _captionCtrl.text.trim().isEmpty && _mediaFile == null) {
       toast(context, 'أضف عنواناً أو وصفاً أو صورة/فيديو للنشر', error: true);
       return;
     }
     setState(() {
       _publishing = true;
-      _statusText = _mediaBytes != null
-          ? (_isVideo ? 'جاري رفع الفيديو إلى السحابة...' : 'جاري رفع الصورة إلى السحابة...')
+      _statusText = _mediaFile != null
+          ? (_isVideo ? 'جاري رفع الفيديو (${(_mediaSize / (1024 * 1024)).toStringAsFixed(1)} MB)...' : 'جاري رفع الصورة...')
           : 'جاري نشر المنشور...';
     });
     try {
       String mediaId = '';
       String uploadedType = '';
-      if (_mediaBytes != null) {
-        final uploaded = await widget.api.uploadFeedMedia(
-          _mediaBytes!,
-          _mediaMime,
-          isVideo: _isVideo,
-        );
+      if (_mediaFile != null) {
+        final uploaded = kIsWeb
+            ? await widget.api.uploadFeedMedia(
+                await _mediaFile!.readAsBytes(),
+                _mediaMime,
+                isVideo: _isVideo,
+              )
+            : await widget.api.uploadFeedMediaStream(
+                _mediaFile!.openRead(),
+                _mediaSize,
+                _mediaMime,
+                isVideo: _isVideo,
+              );
         mediaId = uploaded.id;
         uploadedType = uploaded.type;
       }
@@ -1213,13 +1246,13 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 ),
               ],
             ),
-            if (_mediaBytes != null) ...[
+            if (_mediaFile != null) ...[
               const SizedBox(height: 10),
-              if (!_isVideo)
+              if (!_isVideo && _mediaPreviewBytes != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.memory(
-                    _mediaBytes!,
+                    _mediaPreviewBytes!,
                     height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -1239,7 +1272,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '$_mediaName (${(_mediaBytes!.length / (1024 * 1024)).toStringAsFixed(1)} MB)',
+                        '$_mediaName (${(_mediaSize / (1024 * 1024)).toStringAsFixed(1)} MB)',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
@@ -1251,7 +1284,9 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                       onPressed: _publishing
                           ? null
                           : () => setState(() {
-                                _mediaBytes = null;
+                                _mediaFile = null;
+                                _mediaPreviewBytes = null;
+                                _mediaSize = 0;
                                 _mediaMime = '';
                                 _mediaName = '';
                               }),
@@ -1401,7 +1436,15 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (member != null)
-                              MemberAvatar(member: member, size: 30)
+                              GestureDetector(
+                                onTap: !widget.isGuest
+                                    ? () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                              builder: (_) => ChatMemberProfile(member: member)),
+                                        )
+                                    : null,
+                                child: MemberAvatar(member: member, size: 30),
+                              )
                             else
                               const CircleAvatar(
                                 radius: 15,
@@ -1416,11 +1459,20 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
                                   Row(
                                     children: [
                                       Flexible(
-                                        child: Text(c.authorName,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                                fontSize: 12.5, fontWeight: FontWeight.w800)),
+                                        child: GestureDetector(
+                                          onTap: (!widget.isGuest && member != null)
+                                              ? () => Navigator.of(context).push(
+                                                    MaterialPageRoute(
+                                                        builder: (_) =>
+                                                            ChatMemberProfile(member: member)),
+                                                  )
+                                              : null,
+                                          child: Text(c.authorName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 12.5, fontWeight: FontWeight.w800)),
+                                        ),
                                       ),
                                       const SizedBox(width: 5),
                                       Container(

@@ -10,13 +10,54 @@
  *   /ideas/*                         → أفكار واستطلاعات الأعضاء (قبول / رفض + نسب مئوية، للأعضاء فقط)
  */
 
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+};
+
 const CORS = {
+  ...SECURITY_HEADERS,
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,HEAD,PUT,POST,PATCH,DELETE,OPTIONS',
   'Access-Control-Allow-Headers': 'content-type,x-sync-key,x-chat-auth,x-guest-id,range',
   'Access-Control-Expose-Headers': 'content-range,accept-ranges,content-length,content-type',
   'Access-Control-Max-Age': '86400',
 };
+
+const MAX_MEDIA_BYTES = 95 * 1024 * 1024; // 95 MB streaming upload limit
+
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
+
+async function storeStreamedMedia(request, env, r2Key, type, ownerId) {
+  const length = Number(request.headers.get('content-length') || 0);
+  if (length > MAX_MEDIA_BYTES) return { error: 'حجم الملف يتجاوز 95 ميغابايت', status: 413 };
+  if (length > 0 && request.body) {
+    await env.EPC_BUCKET.put(r2Key, request.body, {
+      httpMetadata: { contentType: type },
+      customMetadata: { owner: ownerId },
+    });
+    return { size: length };
+  }
+  const bytes = await request.arrayBuffer();
+  if (!bytes.byteLength || bytes.byteLength > MAX_MEDIA_BYTES) {
+    return { error: 'الملف فارغ أو يتجاوز 95 ميغابايت', status: 413 };
+  }
+  await env.EPC_BUCKET.put(r2Key, bytes, {
+    httpMetadata: { contentType: type },
+    customMetadata: { owner: ownerId },
+  });
+  return { size: bytes.byteLength };
+}
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -78,7 +119,7 @@ async function chatActor(request, env) {
     if (!rawHeader) return null;
     const creds = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(rawHeader), c => c.charCodeAt(0))));
     if (typeof creds.reg !== 'string' || typeof creds.password !== 'string' || !creds.reg || !creds.password) return null;
-    if (env.CHAT_LEADER_REG && env.CHAT_LEADER_PASS && creds.reg === atob(env.CHAT_LEADER_REG) && creds.password === atob(env.CHAT_LEADER_PASS)) {
+    if (env.CHAT_LEADER_REG && env.CHAT_LEADER_PASS && safeEqual(creds.reg, atob(env.CHAT_LEADER_REG)) && safeEqual(creds.password, atob(env.CHAT_LEADER_PASS))) {
       const obj = await env.EPC_BUCKET.get('members.json');
       const leader = obj ? (await obj.json()).leaderProfile : null;
       return {
@@ -91,7 +132,7 @@ async function chatActor(request, env) {
     const obj = await env.EPC_BUCKET.get('members.json');
     if (!obj) return null;
     const data = await obj.json();
-    const member = (data.members || []).find(m => m.regNumber === creds.reg && m.password === creds.password);
+    const member = (data.members || []).find(m => safeEqual(String(m.regNumber || ''), creds.reg) && safeEqual(String(m.password || ''), creds.password));
     if (!member) return null;
     return {
       id: creds.reg,
@@ -153,7 +194,7 @@ async function serveChatMedia(request, env, id, url) {
   if (!chatIdPattern.test(id)) return json({ error: 'not found' }, 404);
   const exp = Number(url.searchParams.get('exp'));
   const sig = url.searchParams.get('sig') || '';
-  if (!Number.isSafeInteger(exp) || exp < Math.floor(Date.now() / 1000) || exp > Math.floor(Date.now() / 1000) + 3700 || sig !== await chatMac(env, `${id}:${exp}`)) {
+  if (!Number.isSafeInteger(exp) || exp < Math.floor(Date.now() / 1000) || exp > Math.floor(Date.now() / 1000) + 3700 || !safeEqual(sig, await chatMac(env, `${id}:${exp}`))) {
     return json({ error: 'unauthorized' }, 401);
   }
   if (!env.CHAT_MEDIA_SECRET) return json({ error: 'not configured' }, 503);
@@ -165,15 +206,18 @@ async function chatHandler(request, env, url, ctx) {
   if (!actor) return json({ error: 'invalid account' }, 401);
   const path = url.pathname;
   if (path === '/chat/media' && request.method === 'POST') {
-    const type = (request.headers.get('content-type') || '').split(';')[0];
-    if (!/^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|audio\/(mp4|mpeg|ogg|wav|webm|x-m4a))$/.test(type)) return json({ error: 'unsupported media' }, 415);
-    const length = Number(request.headers.get('content-length') || 0);
-    if (length > 15 * 1024 * 1024) return json({ error: 'file exceeds 15 MB' }, 413);
-    const bytes = await request.arrayBuffer();
-    if (!bytes.byteLength || bytes.byteLength > 15 * 1024 * 1024) return json({ error: 'file exceeds 15 MB' }, 413);
+    let type = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const kindHint = (url.searchParams.get('kind') || '').toLowerCase();
+    if (!type || type === 'application/octet-stream') {
+      type = kindHint === 'video' ? 'video/mp4' : (kindHint === 'audio' ? 'audio/mp4' : 'image/jpeg');
+    }
+    if (!/^(image\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+|audio\/[a-z0-9.+-]+)$/.test(type)) {
+      return json({ error: 'unsupported media' }, 415);
+    }
     const id = crypto.randomUUID();
-    await env.EPC_BUCKET.put(`chat/media/${id}`, bytes, { httpMetadata: { contentType: type }, customMetadata: { owner: actor.id } });
-    return json({ id, type, size: bytes.byteLength });
+    const stored = await storeStreamedMedia(request, env, `chat/media/${id}`, type, actor.id);
+    if (stored.error) return json({ error: stored.error }, stored.status);
+    return json({ id, type, size: stored.size });
   }
   if (path === '/chat/messages' && request.method === 'POST') {
     let data; try { data = await request.json(); } catch (_) { return json({ error: 'invalid json' }, 400); }
@@ -275,16 +319,10 @@ async function feedHandler(request, env, url) {
     if (!/^(image\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+)$/.test(type)) {
       return json({ error: 'unsupported media' }, 415);
     }
-    const length = Number(request.headers.get('content-length') || 0);
-    if (length > 25 * 1024 * 1024) return json({ error: 'file exceeds 25 MB' }, 413);
-    const bytes = await request.arrayBuffer();
-    if (!bytes.byteLength || bytes.byteLength > 25 * 1024 * 1024) return json({ error: 'file exceeds 25 MB' }, 413);
     const id = crypto.randomUUID();
-    await env.EPC_BUCKET.put(`feed/media/${id}`, bytes, {
-      httpMetadata: { contentType: type },
-      customMetadata: { owner: actor.id },
-    });
-    return json({ id, type, size: bytes.byteLength, mediaUrl: `${url.origin}/feed/media/${encodeURIComponent(id)}` });
+    const stored = await storeStreamedMedia(request, env, `feed/media/${id}`, type, actor.id);
+    if (stored.error) return json({ error: stored.error }, stored.status);
+    return json({ id, type, size: stored.size, mediaUrl: `${url.origin}/feed/media/${encodeURIComponent(id)}` });
   }
 
   if (path === '/feed/posts' && request.method === 'POST') {
@@ -487,6 +525,9 @@ async function joinRequestsHandler(request, env, url, ctx) {
       return json({ error: 'يرجى تعبئة جميع الحقول المطلوبة' }, 400);
     }
 
+    if (env.CHAT_LEADER_REG && safeEqual(regNumber, atob(env.CHAT_LEADER_REG))) {
+      return json({ error: 'رقم التسجيل غير متاح' }, 409);
+    }
     const membersObj = await env.EPC_BUCKET.get('members.json');
     if (membersObj) {
       const mData = await membersObj.json();
@@ -937,7 +978,7 @@ export default {
       return serveR2Media(request, env, `feed/media/${mediaId}`, url, true);
     }
 
-    if (!env.SYNC_KEY || key !== env.SYNC_KEY) {
+    if (!env.SYNC_KEY || !safeEqual(key, env.SYNC_KEY)) {
       return json({ error: 'unauthorized' }, 401);
     }
 

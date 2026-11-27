@@ -7,6 +7,7 @@ import '../core/club_api.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
+import 'chat_member_profile.dart';
 
 const List<String> kIdeaCategories = [
   'مبادرة اقتصادية',
@@ -217,7 +218,13 @@ class _IdeasTabState extends State<IdeasTab> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (member != null)
-                                    MemberAvatar(member: member, size: 28)
+                                    GestureDetector(
+                                      onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                            builder: (_) => ChatMemberProfile(member: member)),
+                                      ),
+                                      child: MemberAvatar(member: member, size: 28),
+                                    )
                                   else
                                     const CircleAvatar(
                                       radius: 14,
@@ -231,9 +238,18 @@ class _IdeasTabState extends State<IdeasTab> {
                                       children: [
                                         Row(
                                           children: [
-                                            Text(c.authorName,
-                                                style: const TextStyle(
-                                                    fontSize: 12, fontWeight: FontWeight.w800)),
+                                            GestureDetector(
+                                              onTap: member != null
+                                                  ? () => Navigator.of(context).push(
+                                                        MaterialPageRoute(
+                                                            builder: (_) =>
+                                                                ChatMemberProfile(member: member)),
+                                                      )
+                                                  : null,
+                                              child: Text(c.authorName,
+                                                  style: const TextStyle(
+                                                      fontSize: 12, fontWeight: FontWeight.w800)),
+                                            ),
                                             const Spacer(),
                                             Text(relativeTimeAr(c.createdAt),
                                                 style: const TextStyle(
@@ -475,26 +491,39 @@ class _IdeasTabState extends State<IdeasTab> {
               // ── صورة واسم صاحب الفكرة + التصنيف والحالة ──
               Row(
                 children: [
-                  if (author != null)
-                    MemberAvatar(member: author, size: 34)
-                  else
-                    const CircleAvatar(
-                      radius: 17,
-                      backgroundColor: AppColors.softViolet,
-                      child: Icon(Icons.person_outline, size: 17, color: AppColors.purple),
-                    ),
+                  GestureDetector(
+                    onTap: author != null
+                        ? () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
+                            )
+                        : null,
+                    child: author != null
+                        ? MemberAvatar(member: author, size: 34)
+                        : const CircleAvatar(
+                            radius: 17,
+                            backgroundColor: AppColors.softViolet,
+                            child: Icon(Icons.person_outline, size: 17, color: AppColors.purple),
+                          ),
+                  ),
                   const SizedBox(width: 9),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(idea.authorName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
-                        Text('${idea.authorRole} • ${relativeTimeAr(idea.createdAt)}',
-                            style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
-                      ],
+                    child: GestureDetector(
+                      onTap: author != null
+                          ? () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => ChatMemberProfile(member: author)),
+                              )
+                          : null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(idea.authorName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                          Text('${idea.authorRole} • ${relativeTimeAr(idea.createdAt)}',
+                              style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
+                        ],
+                      ),
                     ),
                   ),
                   GestureDetector(

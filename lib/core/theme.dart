@@ -374,9 +374,10 @@ void toast(BuildContext context, String message, {bool error = false}) {
 const double kFloatingNavHeight = 58;
 const double kFloatingNavGap = 12;
 
-double bottomInset(BuildContext context, {double extra = 20}) {
+double bottomInset(BuildContext context, {double extra = 14}) {
   final safe = MediaQuery.paddingOf(context).bottom;
-  return kFloatingNavHeight + kFloatingNavGap + safe + extra;
+  const minClearance = kFloatingNavHeight + kFloatingNavGap;
+  return (safe > minClearance ? safe : minClearance) + extra;
 }
 
 double topInset(BuildContext context, {double extra = 12}) =>
