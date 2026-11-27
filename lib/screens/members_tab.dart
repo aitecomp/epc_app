@@ -31,6 +31,8 @@ class _MembersTabState extends State<MembersTab> {
   String _query = '';
   String? _spec;
   String? _branch;
+  String? _level;
+  String? _role;
 
   @override
   void initState() {
@@ -44,25 +46,42 @@ class _MembersTabState extends State<MembersTab> {
     super.dispose();
   }
 
+  String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[أإآ]'), 'ا')
+      .replaceAll('ة', 'ه')
+      .replaceAll('ى', 'ي');
+
+  List<String> get _availableSpecs {
+    if (_branch != null && kFaculties.containsKey(_branch)) {
+      return kFaculties[_branch]!;
+    }
+    return kSpecializations;
+  }
+
   List<Member> get _filtered {
     var list = widget.store.members.toList();
     if (_query.isNotEmpty) {
-      final q = _query.toLowerCase();
+      final q = _norm(_query);
       list = list.where((m) {
-        return m.fullName.toLowerCase().contains(q) ||
+        return _norm(m.fullName).contains(q) ||
             m.regNumber.contains(q) ||
             m.phone.contains(q) ||
-            m.email.toLowerCase().contains(q) ||
-            m.specialization.toLowerCase().contains(q) ||
-            m.branch.toLowerCase().contains(q);
+            _norm(m.email).contains(q) ||
+            _norm(m.specialization).contains(q) ||
+            _norm(m.branch).contains(q) ||
+            _norm(m.level).contains(q) ||
+            _norm(m.role).contains(q);
       }).toList();
     }
-    if (_spec != null) list = list.where((m) => m.specialization == _spec).toList();
     if (_branch != null) {
       list = list.where((m) =>
           m.branch == _branch ||
           m.displaySpecialization == _branch).toList();
     }
+    if (_spec != null) list = list.where((m) => m.specialization == _spec).toList();
+    if (_level != null) list = list.where((m) => m.level == _level).toList();
+    if (_role != null) list = list.where((m) => m.role == _role).toList();
     return list;
   }
 
@@ -73,7 +92,7 @@ class _MembersTabState extends State<MembersTab> {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
+          padding: EdgeInsets.fromLTRB(16, topInset(context) + 4, 16, 14),
           decoration: const BoxDecoration(
             gradient: AppColors.headerGradient,
             borderRadius: BorderRadius.only(
@@ -136,35 +155,64 @@ class _MembersTabState extends State<MembersTab> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             children: [
               _filterChip(
-                label: _spec ?? 'كل التخصصات',
+                label: _branch ?? 'الكلية',
+                active: _branch != null,
+                onTap: () => _pick(
+                  title: 'الكلية',
+                  items: kBranches,
+                  current: _branch,
+                  onSelected: (v) => setState(() {
+                    _branch = v;
+                    if (v != null && _spec != null && !(kFaculties[v]?.contains(_spec) ?? false)) {
+                      _spec = null;
+                    }
+                  }),
+                ),
+              ),
+              const SizedBox(width: 7),
+              _filterChip(
+                label: _spec ?? 'التخصص',
                 active: _spec != null,
                 onTap: () => _pick(
-                  title: 'التخصص',
-                  items: kSpecializations,
+                  title: _branch != null ? 'تخصصات $_branch' : 'كل التخصصات',
+                  items: _availableSpecs,
                   current: _spec,
                   onSelected: (v) => setState(() => _spec = v),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               _filterChip(
-                label: _branch ?? 'كل الشعب',
-                active: _branch != null,
+                label: _level ?? 'المستوى',
+                active: _level != null,
                 onTap: () => _pick(
-                  title: 'الشعبة',
-                  items: kBranches,
-                  current: _branch,
-                  onSelected: (v) => setState(() => _branch = v),
+                  title: 'المستوى الدراسي',
+                  items: kLevels,
+                  current: _level,
+                  onSelected: (v) => setState(() => _level = v),
                 ),
               ),
-              if (_spec != null || _branch != null) ...[
-                const SizedBox(width: 8),
+              const SizedBox(width: 7),
+              _filterChip(
+                label: _role ?? 'الصفة',
+                active: _role != null,
+                onTap: () => _pick(
+                  title: 'الصفة في النادي',
+                  items: kRoles,
+                  current: _role,
+                  onSelected: (v) => setState(() => _role = v),
+                ),
+              ),
+              if (_spec != null || _branch != null || _level != null || _role != null) ...[
+                const SizedBox(width: 7),
                 _filterChip(
-                  label: 'إزالة الفلاتر',
+                  label: 'إعادة ضبط',
                   active: false,
                   icon: Icons.filter_alt_off_outlined,
                   onTap: () => setState(() {
                     _spec = null;
                     _branch = null;
+                    _level = null;
+                    _role = null;
                   }),
                 ),
               ],

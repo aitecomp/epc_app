@@ -146,12 +146,12 @@ class ActivitiesTab extends StatelessWidget {
 
   Widget _header(BuildContext context, double top, int count) {
     return Container(
-      padding: EdgeInsets.fromLTRB(20, top + 14, 20, 26),
+      padding: EdgeInsets.fromLTRB(16, top + 12, 16, 18),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
         ),
       ),
       child: Column(
@@ -211,12 +211,12 @@ class ActivitiesTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           Text('مرحباً، $memberName',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+                  color: Colors.white, fontSize: 17.5, fontWeight: FontWeight.w800)),
           const SizedBox(height: 5),
           Row(
             children: [
@@ -425,7 +425,7 @@ class _ActivityCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              past ? 'انتهى' : activity.remainingLabel,
+                              past ? 'انتهى' : '${activity.remainingLabel} • منبّه قبل 10 د',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,

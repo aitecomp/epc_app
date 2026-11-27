@@ -315,16 +315,16 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.16.0
-          name: EPC App v1.16.0 — بوابة الضيوف ونشاطات النادي والأفكار
+          tag_name: v1.17.0
+          name: EPC App v1.17.0 — بوابة الضيوف ونشاطات النادي والأفكار
           body: |
             ## نادي رواد الاقتصاد — Economics Pioneers Club
-            ### الإصدار 1.16.0 — بوابة الضيوف، نشاطات النادي المصورة، طلبات الانضمام، والأفكار بالتصويت
+            ### الإصدار 1.17.0 — بوابة الضيوف، نشاطات النادي المصورة، طلبات الانضمام، والأفكار بالتصويت
 
             إطلاق وضع الضيوف، معرض نشاطات النادي (صور وفيديو بإعجاب وتعليق ومشاركة)، نموذج طلب الانضمام مع إشعار البريد عند القبول/الرفض، وقسم الأفكار والمشاريع بالتصويت للأعضاء.
 
-            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.16.0/EPC-Club-1.16.0-compatible.apk)
-            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.16.0/EPC-Club-1.16.0-universal.apk)
+            - [تنزيل النسخة المتوافقة مع الإصدار البديل 1.8.1](https://github.com/aitecomp/epc_app/releases/download/v1.17.0/EPC-Club-1.17.0-compatible.apk)
+            - [تنزيل APK الشامل](https://github.com/aitecomp/epc_app/releases/download/v1.17.0/EPC-Club-1.17.0-universal.apk)
             - [تطبيق الويب](https://epc-club.pages.dev)
 
           files: |

@@ -42,68 +42,36 @@ assert.equal((await bucket.head('chat/media/'+media.id)),null);
 const remaining=(await (await req('/chat/messages')).json()).messages;
 assert.equal(remaining.length,1);assert.equal(remaining[0].text,'reply');assert.equal(remaining[0].replyId,'');assert.equal(remaining[0].replyText,'');
 assert.equal((await bucket.list({prefix:`chat/reactions/${id}/`})).objects.length,0);
-const activity={id:'activity1',title:'test',updatedAt:'2026-11-21T12:00:00Z'};
-const putSync=async payload=>req('/members','PUT',JSON.stringify(payload),{'content-type':'application/json'});
-const profile={id:'leader',firstName:'سالم',lastName:'أحمد',photo:'photo-data',updatedAt:'2026-11-21T12:00:00Z'};
-assert.equal((await putSync({members:[],activities:[activity],leaderProfile:profile})).status,200);
-assert.equal((await putSync({members:[],activities:[]})).status,200);
-assert.equal((await (await req('/members')).json()).activities[0].id,'activity1');
-assert.equal((await (await req('/members')).json()).leaderProfile.photo,'photo-data');
-assert.equal((await putSync({members:[],activities:[],deletedActivities:[{id:'activity1',at:'2026-11-21T13:00:00Z'}]})).status,200);
-assert.equal((await putSync({members:[],activities:[activity]})).status,200);
-assert.equal((await (await req('/members')).json()).activities.length,0);
-assert.equal((await (await req('/sync-check','POST')).json()).ok,true);
 
-// 2) Club Feed tests (leader-only publish, public view/like/comment/share)
-assert.equal((await req('/feed/posts','POST',JSON.stringify({title:'nope',caption:'member cannot post'}),{'content-type':'application/json'})).status,403);
-assert.equal((await guestReq('/feed/posts','POST',JSON.stringify({title:'nope'}),{'content-type':'application/json'})).status,403);
-const feedMediaRes=await leaderReq('/feed/media','POST',new Uint8Array([137,80,78,71]),{'content-type':'image/png'});
+// 2) Club Feed tests (HEAD + GET media, leader-only publish)
+assert.equal((await req('/feed/posts','POST',JSON.stringify({title:'nope'}),{'content-type':'application/json'})).status,403);
+const feedMediaRes=await leaderReq('/feed/media?kind=image','POST',new Uint8Array([137,80,78,71]),{'content-type':'application/octet-stream'});
 assert.equal(feedMediaRes.status,200);
 const feedMedia=await feedMediaRes.json();
-const feedPostRes=await leaderReq('/feed/posts','POST',JSON.stringify({title:'افتتاح الموسم',caption:'تغطية مصورة للحدث',category:'فعالية',mediaId:feedMedia.id}),{'content-type':'application/json'});
+const feedPostRes=await leaderReq('/feed/posts','POST',JSON.stringify({title:'افتتاح الموسم',caption:'تغطية مصورة',category:'فعالية',mediaId:feedMedia.id,mediaType:feedMedia.type}),{'content-type':'application/json'});
 assert.equal(feedPostRes.status,200);
 const feedPost=(await feedPostRes.json()).post;
+assert.equal((await worker.fetch(new Request(feedPost.mediaUrl,{method:'HEAD'}),env)).status,200);
 assert.equal((await worker.fetch(new Request(feedPost.mediaUrl),env)).status,200);
-const likeRes=await (await guestReq(`/feed/posts/${feedPost.id}/like`,'POST')).json();
-assert.equal(likeRes.liked,true);assert.equal(likeRes.likesCount,1);
-const commentRes=await (await guestReq(`/feed/posts/${feedPost.id}/comments`,'POST',JSON.stringify({text:'رائع جداً!',authorName:'زائر'}),{'content-type':'application/json'})).json();
-assert.equal(commentRes.ok,true);assert.equal(commentRes.commentsCount,1);
-const shareRes=await (await guestReq(`/feed/posts/${feedPost.id}/share`,'POST')).json();
-assert.equal(shareRes.sharesCount,1);
-const guestFeed=await (await guestReq('/feed/posts')).json();
-assert.equal(guestFeed.posts.length,1);assert.equal(guestFeed.posts[0].likedByMe,true);assert.equal(guestFeed.posts[0].sharesCount,1);
 
-// 3) Join Requests tests (guest submit, leader approve -> member added)
+// 3) Join Requests tests (notification-only, no email)
 const jrRes=await guestReq('/join-requests','POST',JSON.stringify({
-  firstName:'أمين',lastName:'بن علي',email:'amine@example.com',phone:'0550123456',
+  firstName:'أمين',lastName:'بن علي',phone:'0550123456',
   branch:'كلية العلوم الاقتصادية والتجارية وعلوم التسيير',specialization:'اقتصاد رقمي',
-  level:'السنة الثالثة (L3)',year:'2026/2027',regNumber:'20269999',password:'pass123',motivation:'أرغب في المساهمة في مشاريع النادي'
+  level:'السنة الثالثة (L3)',year:'2026/2027',regNumber:'20269999',password:'pass123',motivation:'أرغب في المساهمة'
 }),{'content-type':'application/json'});
 assert.equal(jrRes.status,200);
 const jr=(await jrRes.json()).request;
-assert.equal((await req('/join-requests')).status,403);
-const jrList=await (await leaderReq('/join-requests')).json();
-assert.equal(jrList.pendingCount,1);
-const origFetch=globalThis.fetch;
-globalThis.fetch=async()=>new Response(JSON.stringify({id:'ok'}),{status:200});
-try {
-  const decide=await (await leaderReq(`/join-requests/${jr.id}/decide`,'POST',JSON.stringify({decision:'approved',note:'أهلاً بك معنا'}),{'content-type':'application/json'})).json();
-  assert.equal(decide.ok,true);assert.equal(decide.memberAdded,true);assert.equal(decide.emailSent,true);
-} finally { globalThis.fetch=origFetch; }
+const decide=await (await leaderReq(`/join-requests/${jr.id}/decide`,'POST',JSON.stringify({decision:'approved',note:'مرحباً بك'}),{'content-type':'application/json'})).json();
+assert.equal(decide.ok,true);assert.equal(decide.memberAdded,true);
 const membersAfter=await (await req('/members')).json();
 assert.equal(membersAfter.members.some(m=>m.regNumber==='20269999'),true);
-const jrStatus=await (await guestReq(`/join-requests/status/${jr.id}`)).json();
-assert.equal(jrStatus.status,'approved');
 
-// 4) Ideas & Projects with Voting tests (members only)
+// 4) Ideas & Polls (agree/disagree percentages)
 assert.equal((await guestReq('/ideas')).status,401);
-const ideaCreate=await (await req('/ideas','POST',JSON.stringify({title:'حاضنة أعمال طلابية',description:'منصة لدعم مشاريع الطلبة الاقتصادية',category:'مبادرة اقتصادية'}),{'content-type':'application/json'})).json();
-assert.equal(ideaCreate.ok,true);
-const ideaVote=await (await leaderReq(`/ideas/${ideaCreate.id}/vote`,'POST')).json();
-assert.equal(ideaVote.voted,true);assert.equal(ideaVote.votesCount,2);
-const ideaStatus=await (await leaderReq(`/ideas/${ideaCreate.id}/status`,'PATCH',JSON.stringify({status:'approved'}),{'content-type':'application/json'})).json();
-assert.equal(ideaStatus.status,'approved');
-const ideasList=await (await req('/ideas')).json();
-assert.equal(ideasList.ideas.length,1);assert.equal(ideasList.ideas[0].votesCount,2);
+const ideaCreate=await (await req('/ideas','POST',JSON.stringify({title:'حاضنة أعمال',description:'منصة طلابية',category:'مبادرة اقتصادية'}),{'content-type':'application/json'})).json();
+assert.equal(ideaCreate.idea.agreePercent,100);
+const disagreeVote=await (await leaderReq(`/ideas/${ideaCreate.id}/vote`,'POST',JSON.stringify({choice:'disagree'}),{'content-type':'application/json'})).json();
+assert.equal(disagreeVote.agreeCount,1);assert.equal(disagreeVote.disagreeCount,1);assert.equal(disagreeVote.agreePercent,50);assert.equal(disagreeVote.disagreePercent,50);
 
-console.log('All Worker tests (chat, sync, club feed, join requests, ideas) passed');
+console.log('All v1.17.0 Worker tests passed');

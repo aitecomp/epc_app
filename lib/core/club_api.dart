@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cloud_sync.dart';
+import 'push_notifications.dart';
 import 'store.dart';
 
 class PostComment {
@@ -44,6 +45,7 @@ class ClubPost {
   final String mediaId;
   final String mediaType;
   final String mediaUrl;
+  final String authorId;
   final String authorName;
   final DateTime createdAt;
   int likesCount;
@@ -61,6 +63,7 @@ class ClubPost {
     required this.mediaId,
     required this.mediaType,
     required this.mediaUrl,
+    required this.authorId,
     required this.authorName,
     required this.createdAt,
     required this.likesCount,
@@ -70,8 +73,8 @@ class ClubPost {
     required this.sharesCount,
   });
 
-  bool get isVideo => mediaType.startsWith('video/');
-  bool get isImage => mediaType.startsWith('image/');
+  bool get isVideo => mediaType.toLowerCase().startsWith('video/');
+  bool get isImage => mediaUrl.isNotEmpty && !isVideo;
   bool get hasMedia => mediaUrl.isNotEmpty;
 
   factory ClubPost.fromJson(Map<String, dynamic> j) {
@@ -88,6 +91,7 @@ class ClubPost {
       mediaId: (j['mediaId'] ?? '').toString(),
       mediaType: (j['mediaType'] ?? '').toString(),
       mediaUrl: (j['mediaUrl'] ?? '').toString(),
+      authorId: (j['authorId'] ?? '').toString(),
       authorName: (j['authorName'] ?? 'قائد النادي').toString(),
       createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal() ?? DateTime.now(),
       likesCount: (j['likesCount'] as num?)?.toInt() ?? 0,
@@ -168,8 +172,12 @@ class IdeaItem {
   final String authorId;
   final String authorName;
   final String authorRole;
-  int votesCount;
-  bool votedByMe;
+  int agreeCount;
+  int disagreeCount;
+  int totalVotes;
+  int agreePercent;
+  int disagreePercent;
+  String myVote; // 'agree' | 'disagree' | ''
   int commentsCount;
   List<PostComment> comments;
   final bool isMine;
@@ -185,8 +193,12 @@ class IdeaItem {
     required this.authorId,
     required this.authorName,
     required this.authorRole,
-    required this.votesCount,
-    required this.votedByMe,
+    required this.agreeCount,
+    required this.disagreeCount,
+    required this.totalVotes,
+    required this.agreePercent,
+    required this.disagreePercent,
+    required this.myVote,
     required this.commentsCount,
     required this.comments,
     required this.isMine,
@@ -198,6 +210,11 @@ class IdeaItem {
         .whereType<Map>()
         .map((c) => PostComment.fromJson(Map<String, dynamic>.from(c)))
         .toList();
+    final agree = (j['agreeCount'] as num?)?.toInt() ?? (j['votesCount'] as num?)?.toInt() ?? 0;
+    final disagree = (j['disagreeCount'] as num?)?.toInt() ?? 0;
+    final total = (j['totalVotes'] as num?)?.toInt() ?? (agree + disagree);
+    final aPct = (j['agreePercent'] as num?)?.toInt() ?? (total > 0 ? ((agree / total) * 100).round() : 0);
+    final dPct = (j['disagreePercent'] as num?)?.toInt() ?? (total > 0 ? 100 - aPct : 0);
     return IdeaItem(
       id: (j['id'] ?? '').toString(),
       title: (j['title'] ?? '').toString(),
@@ -208,8 +225,12 @@ class IdeaItem {
       authorId: (j['authorId'] ?? '').toString(),
       authorName: (j['authorName'] ?? 'عضو').toString(),
       authorRole: (j['authorRole'] ?? 'عضو').toString(),
-      votesCount: (j['votesCount'] as num?)?.toInt() ?? 0,
-      votedByMe: j['votedByMe'] == true,
+      agreeCount: agree,
+      disagreeCount: disagree,
+      totalVotes: total,
+      agreePercent: aPct,
+      disagreePercent: dPct,
+      myVote: (j['myVote'] ?? (j['votedByMe'] == true ? 'agree' : '')).toString(),
       commentsCount: (j['commentsCount'] as num?)?.toInt() ?? rawComments.length,
       comments: rawComments,
       isMine: j['isMine'] == true,
@@ -221,6 +242,7 @@ class IdeaItem {
 class ClubApi {
   static const _kGuestIdKey = 'epc_guest_id_v1';
   static const _kLastJoinReqKey = 'epc_last_join_req_id';
+  static const _kLastNotifiedDecisionKey = 'epc_last_notified_join_decision';
 
   final MemberStore store;
   ClubApi(this.store);
@@ -252,6 +274,16 @@ class ClubApi {
   static Future<void> clearSavedJoinRequestId() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kLastJoinReqKey);
+    await prefs.remove(_kLastNotifiedDecisionKey);
+  }
+
+  static Future<bool> shouldNotifyDecision(String requestId, String status) async {
+    if (status != 'approved' && status != 'rejected') return false;
+    final prefs = await SharedPreferences.getInstance();
+    final token = '$requestId:$status';
+    if (prefs.getString(_kLastNotifiedDecisionKey) == token) return false;
+    await prefs.setString(_kLastNotifiedDecisionKey, token);
+    return true;
   }
 
   Future<Map<String, String>> _headers({bool includeAuth = true}) async {
@@ -293,16 +325,25 @@ class ClubApi {
         .toList();
   }
 
-  Future<String> uploadFeedMedia(Uint8List bytes, String mime) async {
+  Future<({String id, String type})> uploadFeedMedia(
+    Uint8List bytes,
+    String mime, {
+    required bool isVideo,
+  }) async {
     if (!CloudSync.enabled) throw StateError('المزامنة السحابية غير مفعّلة');
     if (bytes.isEmpty || bytes.length > 25 * 1024 * 1024) {
       throw StateError('حجم الملف يتجاوز 25 ميغابايت');
     }
     final h = await _headers();
+    final kind = isVideo ? 'video' : 'image';
     final res = _parse(await http
-        .post(_uri('/feed/media'), headers: {...h, 'content-type': mime}, body: bytes)
+        .post(
+          _uri('/feed/media?kind=$kind'),
+          headers: {...h, 'content-type': mime},
+          body: bytes,
+        )
         .timeout(const Duration(seconds: 120))) as Map;
-    return res['id'].toString();
+    return (id: res['id'].toString(), type: (res['type'] ?? mime).toString());
   }
 
   Future<ClubPost> createPost({
@@ -311,6 +352,7 @@ class ClubApi {
     required String category,
     String location = '',
     String mediaId = '',
+    String mediaType = '',
   }) async {
     final h = await _headers();
     final res = _parse(await http
@@ -323,6 +365,7 @@ class ClubApi {
             'category': category,
             'location': location,
             'mediaId': mediaId,
+            'mediaType': mediaType,
           }),
         )
         .timeout(const Duration(seconds: 25))) as Map;
@@ -373,11 +416,11 @@ class ClubApi {
     return (res['sharesCount'] as num?)?.toInt() ?? 0;
   }
 
-  // ── 2) طلبات الانضمام للنادي (Join Requests) ───────────────────────────
+  // ── 2) طلبات الانضمام للنادي (إشعار فوري موجه، بدون بريد إلكتروني) ──────
   Future<String> submitJoinRequest({
     required String firstName,
     required String lastName,
-    required String email,
+    String email = '',
     required String phone,
     required String branch,
     required String specialization,
@@ -390,6 +433,7 @@ class ClubApi {
   }) async {
     if (!CloudSync.enabled) throw StateError('المزامنة السحابية غير مفعّلة');
     final h = await _headers(includeAuth: false);
+    final fcmToken = await PushNotifications.getDeviceToken();
     final res = _parse(await http
         .post(
           _uri('/join-requests'),
@@ -407,6 +451,7 @@ class ClubApi {
             'password': password,
             'motivation': motivation,
             'photo': photoBase64,
+            'fcmToken': fcmToken,
           }),
         )
         .timeout(const Duration(seconds: 30))) as Map;
@@ -456,7 +501,7 @@ class ClubApi {
     return Map<String, dynamic>.from(res);
   }
 
-  // ── 3) الأفكار والمشاريع بالتصويت (Members Only) ───────────────────────
+  // ── 3) الأفكار والاستطلاعات (قبول / رفض + نسب مئوية، للأعضاء فقط) ───────
   Future<List<IdeaItem>> fetchIdeas() async {
     if (!CloudSync.enabled) return const [];
     final res = _parse(await http
@@ -490,13 +535,29 @@ class ClubApi {
     return IdeaItem.fromJson(Map<String, dynamic>.from(res['idea'] as Map));
   }
 
-  Future<({bool voted, int votesCount})> toggleIdeaVote(String id) async {
+  Future<({
+    String myVote,
+    int agreeCount,
+    int disagreeCount,
+    int totalVotes,
+    int agreePercent,
+    int disagreePercent,
+  })> voteIdea(String id, String choice) async {
+    final h = await _headers();
     final res = _parse(await http
-        .post(_uri('/ideas/${Uri.encodeComponent(id)}/vote'), headers: await _headers())
+        .post(
+          _uri('/ideas/${Uri.encodeComponent(id)}/vote'),
+          headers: {...h, 'content-type': 'application/json'},
+          body: jsonEncode({'choice': choice}),
+        )
         .timeout(const Duration(seconds: 20))) as Map;
     return (
-      voted: res['voted'] == true,
-      votesCount: (res['votesCount'] as num?)?.toInt() ?? 0,
+      myVote: (res['myVote'] ?? '').toString(),
+      agreeCount: (res['agreeCount'] as num?)?.toInt() ?? 0,
+      disagreeCount: (res['disagreeCount'] as num?)?.toInt() ?? 0,
+      totalVotes: (res['totalVotes'] as num?)?.toInt() ?? 0,
+      agreePercent: (res['agreePercent'] as num?)?.toInt() ?? 0,
+      disagreePercent: (res['disagreePercent'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -528,6 +589,16 @@ class ClubApi {
         .delete(_uri('/ideas/${Uri.encodeComponent(ideaId)}'), headers: await _headers())
         .timeout(const Duration(seconds: 20)));
   }
+}
+
+/// البحث عن عضو بالمعرّف لعرض صورته واسمه في المنشورات والاستطلاعات
+Member? findMemberByReg(MemberStore store, String? reg) {
+  if (reg == null || reg.isEmpty) return null;
+  if (reg == store.leaderReg) return store.leaderMember;
+  for (final m in store.members) {
+    if (m.regNumber == reg) return m;
+  }
+  return null;
 }
 
 /// تنسيق الوقت النسبي بالعربية

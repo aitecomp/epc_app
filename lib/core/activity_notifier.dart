@@ -1,28 +1,45 @@
 import 'notifications.dart';
 import 'store.dart';
 
-/// يربط النشاطات بالإشعارات: إشعار فوري عند النشر + منبّه في اليوم والوقت المحدّد
+/// يربط النشاطات بالإشعارات:
+/// - للأعضاء المسجّلين فقط (لا تصل للضيوف)
+/// - منبّه الاهتزاز يُضبط تلقائياً قبل 10 دقائق من موعد النشاط
 class ActivityNotifier {
-  /// جدولة كل الأنشطة القادمة التي لم تُجدَّل بعد
+  static const Duration kAlarmLead = Duration(minutes: 10);
+
+  /// حساب وقت المنبّه (قبل 10 دقائق من النشاط، أو عند الموعد إذا تبقّى أقل من 10 دقائق)
+  static DateTime? alarmTimeFor(DateTime activityTime) {
+    final now = DateTime.now();
+    if (!activityTime.isAfter(now)) return null;
+    final early = activityTime.subtract(kAlarmLead);
+    return early.isAfter(now) ? early : activityTime;
+  }
+
+  /// جدولة كل الأنشطة القادمة التي لم تُجدَّل بعد (للأعضاء فقط)
   static Future<void> scheduleUpcoming(MemberStore store) async {
     if (!Notifications.ready) return;
-    final now = DateTime.now();
+    if (store.sessionReg == null) return; // إشعارات النشاطات للأعضاء فقط
     for (final activity in store.upcomingActivities) {
-      if (activity.at.isBefore(now)) continue;
+      final when = alarmTimeFor(activity.at);
+      if (when == null) continue;
       if (store.isActivityNotified(activity.id)) continue;
       final ok = await Notifications.scheduleAt(
         id: Notifications.idFor('activity_${activity.id}'),
         activityId: activity.id,
-        when: activity.at,
-        title: 'تذكير: ${activity.title}',
+        when: when,
+        title: 'منبّه قبل 10 دقائق: ${activity.title}',
         body: _scheduleBody(activity),
       );
       if (ok) await store.markActivityNotified(activity.id);
     }
   }
 
-  /// إشعار فوري بكل نشاط جديد وصل من السحابة
+  /// إشعار فوري بكل نشاط جديد وصل من السحابة (للأعضاء فقط)
   static Future<void> announceNew(MemberStore store) async {
+    if (store.sessionReg == null) {
+      store.lastSyncedNewActivities = const [];
+      return;
+    }
     final fresh = List<Activity>.from(store.lastSyncedNewActivities);
     if (fresh.isEmpty) return;
     store.lastSyncedNewActivities = const [];
@@ -38,9 +55,10 @@ class ActivityNotifier {
     await scheduleUpcoming(store);
   }
 
-  /// بعد كل مزامنة: إشعار للنشاطات الجديدة + جدولة المنبّهات
+  /// بعد كل مزامنة: إشعار للنشاطات الجديدة + جدولة المنبّهات (للأعضاء فقط)
   static Future<void> afterSync(MemberStore store) async {
     if (!Notifications.ready) return;
+    if (store.sessionReg == null) return;
     await announceNew(store);
     await scheduleUpcoming(store);
   }
@@ -49,12 +67,13 @@ class ActivityNotifier {
   static Future<void> onPublished(Activity activity) async {
     if (!Notifications.ready) return;
     await Notifications.cancel(Notifications.idFor('activity_${activity.id}'));
-    if (activity.at.isAfter(DateTime.now())) {
+    final when = alarmTimeFor(activity.at);
+    if (when != null) {
       await Notifications.scheduleAt(
         id: Notifications.idFor('activity_${activity.id}'),
         activityId: activity.id,
-        when: activity.at,
-        title: 'تذكير: ${activity.title}',
+        when: when,
+        title: 'منبّه قبل 10 دقائق: ${activity.title}',
         body: _scheduleBody(activity),
       );
     }
@@ -69,7 +88,7 @@ class ActivityNotifier {
     final place = activity.place.trim();
     final time = activity.timeLabel;
     return place.isEmpty
-        ? 'الموعد: $time — ${activity.dateLabel}'
-        : '$place • الساعة $time';
+        ? 'يبدأ الساعة $time — ${activity.dateLabel}'
+        : '$place • يبدأ الساعة $time';
   }
 }

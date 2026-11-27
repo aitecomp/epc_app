@@ -6,15 +6,15 @@
  *   GET/PUT /members                 → مزامنة الأعضاء والنشاطات المجدولة
  *   /chat/*                          → دردشة الأعضاء والوسائط
  *   /feed/*                          → منشورات نشاطات النادي (النشر للقائد فقط، العرض للضيوف والأعضاء)
- *   /join-requests/*                 → طلبات الانضمام للنادي + قرار القائد + إرسال بريد إلكتروني
- *   /ideas/*                         → أفكار ومشاريع الأعضاء بالتصويت (للأعضاء فقط)
+ *   /join-requests/*                 → طلبات الانضمام + إشعار فوري موجه لصاحب الطلب (بدون بريد إلكتروني)
+ *   /ideas/*                         → أفكار واستطلاعات الأعضاء (قبول / رفض + نسب مئوية، للأعضاء فقط)
  */
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,PUT,POST,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,HEAD,PUT,POST,PATCH,DELETE,OPTIONS',
   'Access-Control-Allow-Headers': 'content-type,x-sync-key,x-chat-auth,x-guest-id,range',
-  'Access-Control-Expose-Headers': 'content-range,accept-ranges,content-length',
+  'Access-Control-Expose-Headers': 'content-range,accept-ranges,content-length,content-type',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -24,14 +24,15 @@ const json = (data, status = 200) =>
     headers: { ...CORS, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
 
-// OAuth credentials stay only in the Worker secret binding.
 const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)))
   .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const enc = new TextEncoder();
 
-async function sendActivityPush(env, data, validateOnly = false) {
+async function getFirebaseToken(env) {
   const account = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT || '{}');
-  if (!account.private_key || !account.client_email || !account.project_id) throw new Error('Firebase credentials not configured');
+  if (!account.private_key || !account.client_email || !account.project_id) {
+    throw new Error('Firebase credentials not configured');
+  }
   const now = Math.floor(Date.now() / 1000);
   const head = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   const claim = b64url(enc.encode(JSON.stringify({
@@ -52,11 +53,18 @@ async function sendActivityPush(env, data, validateOnly = false) {
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
   });
   if (!tokenResponse.ok) throw new Error(`OAuth failed: ${tokenResponse.status}`);
-  const token = (await tokenResponse.json()).access_token;
-  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
+  return { projectId: account.project_id, token: (await tokenResponse.json()).access_token };
+}
+
+async function sendActivityPush(env, data, validateOnly = false, targetToken = '') {
+  const { projectId, token } = await getFirebaseToken(env);
+  const message = targetToken
+    ? { token: targetToken, android: { priority: 'high', ttl: '86400s' }, data }
+    : { topic: 'epc_activities', android: { priority: 'high', ttl: '86400s' }, data };
+  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/messages:send`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ validate_only: validateOnly, message: { topic: 'epc_activities', android: { priority: 'high', ttl: '86400s' }, data } }),
+    body: JSON.stringify({ validate_only: validateOnly, message }),
   });
   if (!response.ok) throw new Error(`FCM failed: ${response.status}`);
   return await response.json();
@@ -111,6 +119,15 @@ async function mediaUrl(env, origin, id) {
 async function serveR2Media(request, env, r2Key, url, isPublic = false) {
   const meta = await env.EPC_BUCKET.head(r2Key);
   if (!meta) return json({ error: 'not found' }, 404);
+  const contentType = meta.httpMetadata?.contentType || 'application/octet-stream';
+  if (request.method === 'HEAD') {
+    const headers = new Headers(CORS);
+    headers.set('content-type', contentType);
+    headers.set('accept-ranges', 'bytes');
+    headers.set('content-length', String(meta.size));
+    headers.set('cache-control', isPublic ? 'public, max-age=86400' : 'private, no-store');
+    return new Response(null, { headers, status: 200 });
+  }
   const match = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get('range') || '');
   let start, end;
   if (match) {
@@ -123,7 +140,7 @@ async function serveR2Media(request, env, r2Key, url, isPublic = false) {
   const obj = await env.EPC_BUCKET.get(r2Key, match ? { range: { offset: start, length: end - start + 1 } } : {});
   if (!obj) return json({ error: 'not found' }, 404);
   const headers = new Headers(CORS);
-  headers.set('content-type', obj.httpMetadata?.contentType || 'application/octet-stream');
+  headers.set('content-type', obj.httpMetadata?.contentType || contentType);
   headers.set('accept-ranges', 'bytes');
   headers.set('content-length', String(match ? end - start + 1 : meta.size));
   if (match) headers.set('content-range', `bytes ${start}-${end}/${meta.size}`);
@@ -185,7 +202,7 @@ async function chatHandler(request, env, url, ctx) {
     await env.EPC_BUCKET.put(`chat/messages/${id}`, JSON.stringify(message), { httpMetadata: { contentType: 'application/json' } });
     if (ctx && env.FIREBASE_SERVICE_ACCOUNT) {
       const senderHash = b64url(await crypto.subtle.digest('SHA-256', enc.encode(actor.id)));
-      ctx.waitUntil(sendActivityPush(env, { kind: 'chat', id, senderHash }).catch(e => console.error('chat push failed', e.message)));
+      ctx.waitUntil(sendActivityPush(env, { kind: 'chat', id, senderHash, senderName: actor.name }).catch(e => console.error('chat push failed', e.message)));
     }
     return json({ ok: true, id });
   }
@@ -248,11 +265,14 @@ async function feedHandler(request, env, url) {
   const guestId = (request.headers.get('x-guest-id') || '').trim().slice(0, 80);
   const viewerId = actor ? `member:${actor.id}` : (guestId ? `guest:${guestId}` : '');
 
-  // رفع صورة أو فيديو لمنشور نشاط (القائد فقط)
   if (path === '/feed/media' && request.method === 'POST') {
     if (!actor || !actor.isLeader) return json({ error: 'leader only' }, 403);
-    const type = (request.headers.get('content-type') || '').split(';')[0];
-    if (!/^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime))$/.test(type)) {
+    let type = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const kindHint = (url.searchParams.get('kind') || '').toLowerCase();
+    if (!type || type === 'application/octet-stream') {
+      type = kindHint === 'video' ? 'video/mp4' : 'image/jpeg';
+    }
+    if (!/^(image\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+)$/.test(type)) {
       return json({ error: 'unsupported media' }, 415);
     }
     const length = Number(request.headers.get('content-length') || 0);
@@ -267,7 +287,6 @@ async function feedHandler(request, env, url) {
     return json({ id, type, size: bytes.byteLength, mediaUrl: `${url.origin}/feed/media/${encodeURIComponent(id)}` });
   }
 
-  // نشر منشور نشاط جديد (القائد فقط)
   if (path === '/feed/posts' && request.method === 'POST') {
     if (!actor || !actor.isLeader) return json({ error: 'leader only' }, 403);
     let data; try { data = await request.json(); } catch (_) { return json({ error: 'invalid json' }, 400); }
@@ -276,12 +295,13 @@ async function feedHandler(request, env, url) {
     const category = typeof data.category === 'string' && data.category.trim() ? data.category.trim().slice(0, 40) : 'فعالية';
     const location = typeof data.location === 'string' ? data.location.trim().slice(0, 120) : '';
     const mediaId = typeof data.mediaId === 'string' && chatIdPattern.test(data.mediaId) ? data.mediaId : '';
+    const explicitMediaType = typeof data.mediaType === 'string' ? data.mediaType.trim().slice(0, 80) : '';
     if (!title && !caption && !mediaId) return json({ error: 'empty post' }, 400);
-    let mediaType = '';
+    let mediaType = explicitMediaType;
     if (mediaId) {
       const obj = await env.EPC_BUCKET.head(`feed/media/${mediaId}`);
       if (!obj) return json({ error: 'invalid media' }, 400);
-      mediaType = obj.httpMetadata?.contentType || '';
+      mediaType = obj.httpMetadata?.contentType || explicitMediaType || 'image/jpeg';
     }
     const id = `${Date.now().toString().padStart(13, '0')}_${crypto.randomUUID()}`;
     const post = {
@@ -312,7 +332,6 @@ async function feedHandler(request, env, url) {
     });
   }
 
-  // جلب منشورات نشاطات النادي (للضيوف والأعضاء والقائد)
   if (path === '/feed/posts' && request.method === 'GET') {
     let cursor, keys = [];
     do {
@@ -327,6 +346,11 @@ async function feedHandler(request, env, url) {
       const p = await obj.json();
       const likes = Array.isArray(p.likes) ? p.likes : [];
       const comments = Array.isArray(p.comments) ? p.comments : [];
+      let mType = p.mediaType || '';
+      if (p.mediaId && !mType) {
+        const meta = await env.EPC_BUCKET.head(`feed/media/${p.mediaId}`);
+        mType = meta?.httpMetadata?.contentType || 'image/jpeg';
+      }
       return {
         id: p.id,
         title: p.title || '',
@@ -334,8 +358,9 @@ async function feedHandler(request, env, url) {
         category: p.category || 'فعالية',
         location: p.location || '',
         mediaId: p.mediaId || '',
-        mediaType: p.mediaType || '',
+        mediaType: mType,
         mediaUrl: p.mediaId ? `${url.origin}/feed/media/${encodeURIComponent(p.mediaId)}` : '',
+        authorId: p.authorId || '',
         authorName: p.authorName || 'قائد النادي',
         createdAt: p.createdAt,
         likesCount: likes.length,
@@ -348,7 +373,6 @@ async function feedHandler(request, env, url) {
     return json({ posts });
   }
 
-  // حذف منشور (القائد فقط)
   const deleteMatch = /^\/feed\/posts\/([^/]+)$/.exec(path);
   if (deleteMatch && request.method === 'DELETE') {
     if (!actor || !actor.isLeader) return json({ error: 'leader only' }, 403);
@@ -364,7 +388,6 @@ async function feedHandler(request, env, url) {
     return json({ ok: true });
   }
 
-  // إعجاب (قلب) على منشور
   const likeMatch = /^\/feed\/posts\/([^/]+)\/like$/.exec(path);
   if (likeMatch && request.method === 'POST') {
     const id = decodeURIComponent(likeMatch[1]);
@@ -383,7 +406,6 @@ async function feedHandler(request, env, url) {
     return json({ ok: true, liked, likesCount: likes.length });
   }
 
-  // تعليق على منشور
   const commentMatch = /^\/feed\/posts\/([^/]+)\/comments$/.exec(path);
   if (commentMatch && request.method === 'POST') {
     const id = decodeURIComponent(commentMatch[1]);
@@ -397,7 +419,7 @@ async function feedHandler(request, env, url) {
     const authorName = actor ? actor.name : ((typeof data.authorName === 'string' ? data.authorName.trim().slice(0, 60) : '') || 'ضيف');
     const comment = {
       id: `${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
-      authorId: viewerId || 'guest',
+      authorId: actor ? actor.id : (viewerId || 'guest'),
       authorName,
       authorRole: actor ? actor.role : 'ضيف',
       text,
@@ -408,7 +430,6 @@ async function feedHandler(request, env, url) {
     return json({ ok: true, comment, commentsCount: post.comments.length });
   }
 
-  // حذف تعليق (القائد أو صاحب التعليق)
   const delCommentMatch = /^\/feed\/posts\/([^/]+)\/comments\/([^/]+)$/.exec(path);
   if (delCommentMatch && request.method === 'DELETE') {
     const id = decodeURIComponent(delCommentMatch[1]);
@@ -420,13 +441,12 @@ async function feedHandler(request, env, url) {
     const comments = Array.isArray(post.comments) ? post.comments : [];
     const target = comments.find(c => c.id === cid);
     if (!target) return json({ ok: true });
-    if (!(actor && actor.isLeader) && target.authorId !== viewerId) return json({ error: 'forbidden' }, 403);
+    if (!(actor && actor.isLeader) && target.authorId !== (actor ? actor.id : viewerId)) return json({ error: 'forbidden' }, 403);
     post.comments = comments.filter(c => c.id !== cid);
     await env.EPC_BUCKET.put(`feed/posts/${id}`, JSON.stringify(post), { httpMetadata: { contentType: 'application/json' } });
     return json({ ok: true, commentsCount: post.comments.length });
   }
 
-  // تسجيل مشاركة لمنشور
   const shareMatch = /^\/feed\/posts\/([^/]+)\/share$/.exec(path);
   if (shareMatch && request.method === 'POST') {
     const id = decodeURIComponent(shareMatch[1]);
@@ -442,138 +462,10 @@ async function feedHandler(request, env, url) {
   return json({ error: 'not found' }, 404);
 }
 
-// ── 2) إرسال بريد القبول أو الرفض للمتقدم للانضمام ────────────────────────
-function buildDecisionEmail(req, decision, note) {
-  const fullName = `${req.firstName} ${req.lastName}`.trim();
-  const approved = decision === 'approved';
-  const subject = approved
-    ? '🎉 مبروك! تم قبول طلب انضمامك إلى نادي رواد الاقتصاد (EPC)'
-    : 'بخصوص طلب انضمامك إلى نادي رواد الاقتصاد (EPC)';
-  const safeNote = (note || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-  const html = `
-  <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;background:#f4f6f9;padding:24px;">
-    <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e4e9ed;">
-      <div style="background:linear-gradient(135deg,#08172A,#132A43);padding:26px 24px;text-align:center;">
-        <h1 style="margin:0;color:#ffffff;font-size:22px;">نادي رواد الاقتصاد — EPC</h1>
-        <p style="margin:6px 0 0;color:#E7CD98;font-size:12px;letter-spacing:1.5px;">ECONOMICS PIONEERS CLUB</p>
-      </div>
-      <div style="padding:26px 24px;color:#101D30;line-height:1.8;font-size:15px;">
-        <p>مرحباً <strong>${fullName}</strong>،</p>
-        ${approved ? `
-          <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:16px;margin:16px 0;color:#065f46;">
-            <strong>يسعدنا إبلاغك بقبول طلب انضمامك رسمياً إلى نادي رواد الاقتصاد!</strong>
-          </div>
-          <p>يمكنك الآن تسجيل الدخول إلى تطبيق النادي باستخدام بياناتك التي اخترتها عند التقديم:</p>
-          <ul style="background:#f8fafc;border-radius:12px;padding:14px 28px;border:1px solid #e2e8f0;">
-            <li><strong>رقم التسجيل:</strong> ${req.regNumber}</li>
-            <li><strong>التخصص:</strong> ${req.specialization}</li>
-            <li><strong>المستوى:</strong> ${req.level}</li>
-          </ul>
-          ${safeNote ? `<p><strong>ملاحظة القائد:</strong> ${safeNote}</p>` : ''}
-          <p>نتطلع لمشاركتك الفاعلة معنا في الفعاليات والأفكار والمشاريع القادمة.</p>
-        ` : `
-          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px;margin:16px 0;color:#991b1b;">
-            نشكرك على اهتمامك بالانضمام إلى نادي رواد الاقتصاد. نعتذر لعدم تمكّننا من قبول طلبك في هذه الدورة.
-          </div>
-          ${safeNote ? `<p><strong>ملاحظة القائد:</strong> ${safeNote}</p>` : ''}
-          <p>يمكنك متابعة نشاطات النادي المفتوحة للجميع وإعادة التقديم في الدورات القادمة.</p>
-        `}
-        <p style="margin-top:24px;color:#667587;font-size:13px;">مع أطيب التحيات،<br>قيادة نادي رواد الاقتصاد — جامعة غيليزان</p>
-      </div>
-    </div>
-  </div>`;
-  const text = approved
-    ? `مرحباً ${fullName}،\n\nمبروك! تم قبول طلب انضمامك رسمياً إلى نادي رواد الاقتصاد (EPC).\nيمكنك الآن تسجيل الدخول برقم التسجيل: ${req.regNumber} وكلمة المرور التي اخترتها.${note ? `\nملاحظة القائد: ${note}` : ''}\n\nقيادة نادي رواد الاقتصاد`
-    : `مرحباً ${fullName}،\n\nنشكرك على اهتمامك بنادي رواد الاقتصاد (EPC). نعتذر لعدم قبول طلبك في هذه الدورة.${note ? `\nملاحظة القائد: ${note}` : ''}\n\nقيادة نادي رواد الاقتصاد`;
-  return { subject, html, text };
-}
-
-async function sendDecisionEmail(env, req, decision, note) {
-  if (!req.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.email)) {
-    return { emailSent: false, emailError: 'invalid email' };
-  }
-  const { subject, html, text } = buildDecisionEmail(req, decision, note);
-  const fromAddress = env.MAIL_FROM || 'noreply@epc-club.dz';
-  const fromName = 'نادي رواد الاقتصاد — EPC';
-
-  // 1) Resend API (إن كان مضبوطاً)
-  if (env.RESEND_API_KEY) {
-    try {
-      const r = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ from: `${fromName} <${fromAddress}>`, to: [req.email], subject, html, text }),
-      });
-      if (r.ok) return { emailSent: true, provider: 'resend' };
-      return { emailSent: false, emailError: `resend:${r.status}` };
-    } catch (e) {
-      return { emailSent: false, emailError: `resend:${e.message}` };
-    }
-  }
-
-  // 2) Brevo API (إن كان مضبوطاً)
-  if (env.BREVO_API_KEY) {
-    try {
-      const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: { 'api-key': env.BREVO_API_KEY, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          sender: { name: fromName, email: fromAddress },
-          to: [{ email: req.email, name: `${req.firstName} ${req.lastName}`.trim() }],
-          subject,
-          htmlContent: html,
-          textContent: text,
-        }),
-      });
-      if (r.ok) return { emailSent: true, provider: 'brevo' };
-      return { emailSent: false, emailError: `brevo:${r.status}` };
-    } catch (e) {
-      return { emailSent: false, emailError: `brevo:${e.message}` };
-    }
-  }
-
-  // 3) Webhook مخصص لإرسال البريد إن كان مضبوطاً
-  if (env.EMAIL_WEBHOOK_URL) {
-    try {
-      const r = await fetch(env.EMAIL_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(env.EMAIL_WEBHOOK_SECRET ? { 'x-webhook-secret': env.EMAIL_WEBHOOK_SECRET } : {}) },
-        body: JSON.stringify({ to: req.email, subject, html, text, decision, applicant: `${req.firstName} ${req.lastName}`.trim() }),
-      });
-      if (r.ok) return { emailSent: true, provider: 'webhook' };
-      return { emailSent: false, emailError: `webhook:${r.status}` };
-    } catch (e) {
-      return { emailSent: false, emailError: `webhook:${e.message}` };
-    }
-  }
-
-  // 4) MailChannels fallback على Cloudflare Workers
-  try {
-    const r = await fetch('https://api.mailchannels.net/tx/v1/send', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: req.email, name: `${req.firstName} ${req.lastName}`.trim() }] }],
-        from: { email: fromAddress, name: fromName },
-        subject,
-        content: [
-          { type: 'text/plain', value: text },
-          { type: 'text/html', value: html },
-        ],
-      }),
-    });
-    if (r.ok) return { emailSent: true, provider: 'mailchannels' };
-    return { emailSent: false, emailError: `mailchannels:${r.status}` };
-  } catch (e) {
-    return { emailSent: false, emailError: `mailchannels:${e.message}` };
-  }
-}
-
-// ── 3) طلبات الانضمام للنادي ───────────────────────────────────────────────
-async function joinRequestsHandler(request, env, url) {
+// ── 2) طلبات الانضمام للنادي + إشعار فوري موجه لصاحب الطلب فقط ───────────
+async function joinRequestsHandler(request, env, url, ctx) {
   const path = url.pathname;
 
-  // إرسال طلب انضمام جديد (متاح للضيوف بدون حساب)
   if (path === '/join-requests' && request.method === 'POST') {
     let data; try { data = await request.json(); } catch (_) { return json({ error: 'invalid json' }, 400); }
     const firstName = String(data.firstName || '').trim().slice(0, 60);
@@ -588,15 +480,13 @@ async function joinRequestsHandler(request, env, url) {
     const password = String(data.password || '').slice(0, 60);
     const motivation = String(data.motivation || '').trim().slice(0, 1500);
     const photo = typeof data.photo === 'string' && data.photo.length < 1500000 ? data.photo : '';
+    const fcmToken = String(data.fcmToken || '').trim().slice(0, 300);
+    const guestId = String(request.headers.get('x-guest-id') || data.guestId || '').trim().slice(0, 80);
 
-    if (!firstName || !lastName || !email || !phone || !regNumber || password.length < 4) {
+    if (!firstName || !lastName || !phone || !regNumber || password.length < 4) {
       return json({ error: 'يرجى تعبئة جميع الحقول المطلوبة' }, 400);
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return json({ error: 'صيغة البريد الإلكتروني غير صحيحة' }, 400);
-    }
 
-    // التحقق من عدم وجود رقم التسجيل مسبقاً
     const membersObj = await env.EPC_BUCKET.get('members.json');
     if (membersObj) {
       const mData = await membersObj.json();
@@ -620,6 +510,8 @@ async function joinRequestsHandler(request, env, url) {
       password,
       motivation,
       photo,
+      fcmToken,
+      guestId,
       status: 'pending',
       leaderNote: '',
       createdAt: new Date().toISOString(),
@@ -628,6 +520,19 @@ async function joinRequestsHandler(request, env, url) {
     await env.EPC_BUCKET.put(`join_requests/${id}`, JSON.stringify(joinReq), {
       httpMetadata: { contentType: 'application/json' },
     });
+
+    // إشعار ذكي للقائد فقط بوصول طلب انضمام جديد
+    if (ctx && env.FIREBASE_SERVICE_ACCOUNT) {
+      ctx.waitUntil(
+        sendActivityPush(env, {
+          kind: 'join_request_new',
+          id,
+          applicantName: `${firstName} ${lastName}`.trim(),
+          specialization,
+        }).catch(e => console.error('leader join push failed', e.message))
+      );
+    }
+
     return json({
       ok: true,
       request: {
@@ -642,7 +547,6 @@ async function joinRequestsHandler(request, env, url) {
     });
   }
 
-  // استعلام الضيف عن حالة طلبه
   const statusMatch = /^\/join-requests\/status\/([^/]+)$/.exec(path);
   if (statusMatch && request.method === 'GET') {
     const id = decodeURIComponent(statusMatch[1]);
@@ -654,7 +558,7 @@ async function joinRequestsHandler(request, env, url) {
       id: r.id,
       firstName: r.firstName,
       lastName: r.lastName,
-      email: r.email,
+      email: r.email || '',
       regNumber: r.regNumber,
       status: r.status,
       leaderNote: r.leaderNote || '',
@@ -663,11 +567,9 @@ async function joinRequestsHandler(request, env, url) {
     });
   }
 
-  // المسارات التالية للقائد فقط
   const actor = await chatActor(request, env);
   if (!actor || !actor.isLeader) return json({ error: 'leader only' }, 403);
 
-  // عرض جميع طلبات الانضمام للقائد
   if (path === '/join-requests' && request.method === 'GET') {
     let cursor, keys = [];
     do {
@@ -680,13 +582,13 @@ async function joinRequestsHandler(request, env, url) {
       const obj = await env.EPC_BUCKET.get(key);
       if (!obj) return null;
       const r = await obj.json();
-      return { ...r, password: '' };
+      return { ...r, password: '', fcmToken: '' };
     }))).filter(Boolean);
     const pendingCount = requests.filter(r => r.status === 'pending').length;
     return json({ requests, pendingCount });
   }
 
-  // قبول أو رفض طلب انضمام (القائد فقط) + إضافة العضو عند القبول + إرسال بريد تلقائي
+  // قبول أو رفض طلب الانضمام (القائد فقط) -> إشعار موجه حصراً لصاحب الطلب فقط (بدون بريد إلكتروني)
   const decideMatch = /^\/join-requests\/([^/]+)\/decide$/.exec(path);
   if (decideMatch && request.method === 'POST') {
     const id = decodeURIComponent(decideMatch[1]);
@@ -714,7 +616,7 @@ async function joinRequestsHandler(request, env, url) {
         regNumber: joinReq.regNumber,
         password: joinReq.password,
         phone: joinReq.phone,
-        email: joinReq.email,
+        email: joinReq.email || '',
         role: 'عضو',
         photo: joinReq.photo || '',
         joinedAt: nowIso,
@@ -742,29 +644,82 @@ async function joinRequestsHandler(request, env, url) {
       httpMetadata: { contentType: 'application/json' },
     });
 
-    const emailResult = await sendDecisionEmail(env, joinReq, decision, note);
-    const emailPreview = buildDecisionEmail(joinReq, decision, note);
+    // إرسال إشعار فوري موجه لصاحب الطلب فقط
+    let pushSent = false;
+    if (env.FIREBASE_SERVICE_ACCOUNT) {
+      const payload = {
+        kind: 'join_decision',
+        id: joinReq.id,
+        requestId: joinReq.id,
+        guestId: joinReq.guestId || '',
+        status: decision,
+        regNumber: joinReq.regNumber || '',
+        note,
+      };
+      try {
+        if (joinReq.fcmToken) {
+          await sendActivityPush(env, payload, false, joinReq.fcmToken);
+        } else {
+          await sendActivityPush(env, payload, false);
+        }
+        pushSent = true;
+      } catch (e) {
+        console.error('join decision push failed', e.message);
+      }
+    }
+
     return json({
       ok: true,
       status: decision,
       memberAdded,
-      emailSent: emailResult.emailSent,
-      emailError: emailResult.emailError || '',
-      emailSubject: emailPreview.subject,
-      emailText: emailPreview.text,
+      pushSent,
     });
   }
 
   return json({ error: 'not found' }, 404);
 }
 
-// ── 4) قسم الأفكار والمشاريع بالتصويت (خاص بأعضاء النادي والقائد فقط) ──────
+// ── 3) قسم الأفكار والاستطلاعات (قبول / رفض + نسب مئوية، للأعضاء فقط) ────
+function serializeIdea(item, actorId) {
+  const agree = Array.isArray(item.agreeVotes)
+    ? item.agreeVotes
+    : (Array.isArray(item.votes) ? item.votes : []);
+  const disagree = Array.isArray(item.disagreeVotes) ? item.disagreeVotes : [];
+  const totalVotes = agree.length + disagree.length;
+  const agreePercent = totalVotes > 0 ? Math.round((agree.length / totalVotes) * 100) : 0;
+  const disagreePercent = totalVotes > 0 ? 100 - agreePercent : 0;
+  const myVote = agree.includes(actorId) ? 'agree' : (disagree.includes(actorId) ? 'disagree' : '');
+  const comments = Array.isArray(item.comments) ? item.comments : [];
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    category: item.category || 'مشروع',
+    expectedImpact: item.expectedImpact || '',
+    status: item.status || 'proposed',
+    authorId: item.authorId,
+    authorName: item.authorName,
+    authorRole: item.authorRole || 'عضو',
+    agreeCount: agree.length,
+    disagreeCount: disagree.length,
+    totalVotes,
+    agreePercent,
+    disagreePercent,
+    myVote,
+    votesCount: agree.length,
+    votedByMe: myVote === 'agree',
+    commentsCount: comments.length,
+    comments,
+    isMine: item.authorId === actorId,
+    createdAt: item.createdAt,
+  };
+}
+
 async function ideasHandler(request, env, url) {
   const actor = await chatActor(request, env);
   if (!actor) return json({ error: 'members only' }, 401);
   const path = url.pathname;
 
-  // جلب قائمة الأفكار والمشاريع
   if (path === '/ideas' && request.method === 'GET') {
     let cursor, keys = [];
     do {
@@ -776,31 +731,11 @@ async function ideasHandler(request, env, url) {
     const ideas = (await Promise.all(keys.map(async key => {
       const obj = await env.EPC_BUCKET.get(key);
       if (!obj) return null;
-      const item = await obj.json();
-      const votes = Array.isArray(item.votes) ? item.votes : [];
-      const comments = Array.isArray(item.comments) ? item.comments : [];
-      return {
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        category: item.category || 'مشروع',
-        expectedImpact: item.expectedImpact || '',
-        status: item.status || 'proposed',
-        authorId: item.authorId,
-        authorName: item.authorName,
-        authorRole: item.authorRole || 'عضو',
-        votesCount: votes.length,
-        votedByMe: votes.includes(actor.id),
-        commentsCount: comments.length,
-        comments,
-        isMine: item.authorId === actor.id,
-        createdAt: item.createdAt,
-      };
+      return serializeIdea(await obj.json(), actor.id);
     }))).filter(Boolean);
     return json({ ideas });
   }
 
-  // نشر فكرة أو مشروع جديد
   if (path === '/ideas' && request.method === 'POST') {
     let data; try { data = await request.json(); } catch (_) { return json({ error: 'invalid json' }, 400); }
     const title = String(data.title || '').trim().slice(0, 140);
@@ -819,35 +754,67 @@ async function ideasHandler(request, env, url) {
       authorId: actor.id,
       authorName: actor.name,
       authorRole: actor.role,
-      votes: [actor.id],
+      agreeVotes: [actor.id],
+      disagreeVotes: [],
       comments: [],
       createdAt: new Date().toISOString(),
     };
     await env.EPC_BUCKET.put(`ideas/${id}`, JSON.stringify(idea), {
       httpMetadata: { contentType: 'application/json' },
     });
-    return json({ ok: true, id, idea: { ...idea, votesCount: 1, votedByMe: true, commentsCount: 0, isMine: true } });
+    return json({ ok: true, id, idea: serializeIdea(idea, actor.id) });
   }
 
-  // التصويت لفكرة / إلغاء التصويت
+  // التصويت بـ قبول (agree) أو رفض (disagree)
   const voteMatch = /^\/ideas\/([^/]+)\/vote$/.exec(path);
   if (voteMatch && request.method === 'POST') {
     const id = decodeURIComponent(voteMatch[1]);
     if (!chatIdPattern.test(id)) return json({ error: 'invalid id' }, 400);
+    let data = {};
+    try { data = await request.json(); } catch (_) {}
+    const choice = data.choice === 'disagree' ? 'disagree' : 'agree';
     const obj = await env.EPC_BUCKET.get(`ideas/${id}`);
     if (!obj) return json({ error: 'not found' }, 404);
     const idea = await obj.json();
-    const votes = Array.isArray(idea.votes) ? idea.votes : [];
-    const idx = votes.indexOf(actor.id);
-    let voted;
-    if (idx >= 0) { votes.splice(idx, 1); voted = false; }
-    else { votes.push(actor.id); voted = true; }
-    idea.votes = votes;
+    let agree = Array.isArray(idea.agreeVotes)
+      ? [...idea.agreeVotes]
+      : (Array.isArray(idea.votes) ? [...idea.votes] : []);
+    let disagree = Array.isArray(idea.disagreeVotes) ? [...idea.disagreeVotes] : [];
+
+    if (choice === 'agree') {
+      if (agree.includes(actor.id)) {
+        agree = agree.filter(x => x !== actor.id);
+      } else {
+        agree.push(actor.id);
+        disagree = disagree.filter(x => x !== actor.id);
+      }
+    } else {
+      if (disagree.includes(actor.id)) {
+        disagree = disagree.filter(x => x !== actor.id);
+      } else {
+        disagree.push(actor.id);
+        agree = agree.filter(x => x !== actor.id);
+      }
+    }
+
+    idea.agreeVotes = agree;
+    idea.disagreeVotes = disagree;
+    delete idea.votes;
     await env.EPC_BUCKET.put(`ideas/${id}`, JSON.stringify(idea), { httpMetadata: { contentType: 'application/json' } });
-    return json({ ok: true, voted, votesCount: votes.length });
+    const serialized = serializeIdea(idea, actor.id);
+    return json({
+      ok: true,
+      myVote: serialized.myVote,
+      agreeCount: serialized.agreeCount,
+      disagreeCount: serialized.disagreeCount,
+      totalVotes: serialized.totalVotes,
+      agreePercent: serialized.agreePercent,
+      disagreePercent: serialized.disagreePercent,
+      voted: serialized.myVote === 'agree',
+      votesCount: serialized.agreeCount,
+    });
   }
 
-  // إضافة تعليق على فكرة
   const commentMatch = /^\/ideas\/([^/]+)\/comments$/.exec(path);
   if (commentMatch && request.method === 'POST') {
     const id = decodeURIComponent(commentMatch[1]);
@@ -871,7 +838,6 @@ async function ideasHandler(request, env, url) {
     return json({ ok: true, comment, commentsCount: idea.comments.length });
   }
 
-  // تحديث حالة المشروع (القائد فقط)
   const statusMatch = /^\/ideas\/([^/]+)\/status$/.exec(path);
   if (statusMatch && (request.method === 'PATCH' || request.method === 'POST')) {
     if (!actor.isLeader) return json({ error: 'leader only' }, 403);
@@ -889,7 +855,6 @@ async function ideasHandler(request, env, url) {
     return json({ ok: true, status: idea.status });
   }
 
-  // حذف فكرة (القائد أو صاحب الفكرة)
   const deleteMatch = /^\/ideas\/([^/]+)$/.exec(path);
   if (deleteMatch && request.method === 'DELETE') {
     const id = decodeURIComponent(deleteMatch[1]);
@@ -948,7 +913,6 @@ export default {
 
     if (path === '/health') return json({ ok: true, service: 'epc-sync' });
 
-    // ── تنزيل تطبيق الأندرويد مباشرة (بدون مفتاح) ──────────────────────
     if (path === '/app' || path === '/app.apk') {
       const object = (await env.EPC_BUCKET.get('epc-arm64.apk')) ||
         (await env.EPC_BUCKET.get('epc-universal.apk'));
@@ -962,12 +926,12 @@ export default {
       return new Response(object.body, { headers });
     }
 
-    if (path.startsWith('/chat/media/') && request.method === 'GET') {
+    if (path.startsWith('/chat/media/') && (request.method === 'GET' || request.method === 'HEAD')) {
       return serveChatMedia(request, env, path.slice('/chat/media/'.length), url);
     }
 
-    // وسائط منشورات النادي متاحة للضيوف والأعضاء
-    if (path.startsWith('/feed/media/') && request.method === 'GET') {
+    // وسائط منشورات النادي متاحة للضيوف والأعضاء (GET + HEAD لبث الفيديو والصور)
+    if (path.startsWith('/feed/media/') && (request.method === 'GET' || request.method === 'HEAD')) {
       const mediaId = decodeURIComponent(path.slice('/feed/media/'.length));
       if (!chatIdPattern.test(mediaId)) return json({ error: 'not found' }, 404);
       return serveR2Media(request, env, `feed/media/${mediaId}`, url, true);
@@ -990,7 +954,7 @@ export default {
 
     if (path.startsWith('/chat/')) return chatHandler(request, env, url, ctx);
     if (path.startsWith('/feed/')) return feedHandler(request, env, url);
-    if (path === '/join-requests' || path.startsWith('/join-requests/')) return joinRequestsHandler(request, env, url);
+    if (path === '/join-requests' || path.startsWith('/join-requests/')) return joinRequestsHandler(request, env, url, ctx);
     if (path === '/ideas' || path.startsWith('/ideas/')) return ideasHandler(request, env, url);
 
     if (path === '/notify' && request.method === 'POST') {
@@ -1004,7 +968,6 @@ export default {
       catch (e) { console.error('push failed', e.message); return json({ error: 'push unavailable' }, 502); }
     }
 
-    // ── رفع نسخة التطبيق (من CI فقط، بالمفتاح) ─────────────────────────
     if (path === '/app' && (request.method === 'PUT' || request.method === 'POST')) {
       const body = await request.arrayBuffer();
       if (!body || body.byteLength < 1024) return json({ error: 'apk required' }, 400);

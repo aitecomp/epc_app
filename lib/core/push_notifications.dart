@@ -1,12 +1,13 @@
 import 'dart:convert';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:crypto/crypto.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'activity_notifier.dart';
 import 'cloud_sync.dart';
 import 'notifications.dart';
 import 'store.dart';
@@ -35,28 +36,95 @@ class PushNotifications {
     }
   }
 
+  /// رمز الجهاز لإرسال إشعارات مخصّصة لصاحب طلب الانضمام فقط
+  static Future<String> getDeviceToken() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return '';
+    try {
+      return (await FirebaseMessaging.instance.getToken()) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   static Future<void> handle(RemoteMessage message) async {
     final data = message.data;
     final id = data['id']?.toString() ?? '';
+    final kind = data['kind']?.toString() ?? '';
     if (id.isEmpty) return;
-    if (data['kind'] == 'chat') {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
-      final reg = prefs.getString('epc_session_v2');
-      if (reg == null) return;
-      final hash = base64Url.encode(sha256.convert(utf8.encode(reg)).bytes).replaceAll('=', '');
-      if (hash == data['senderHash']) return;
-      await Notifications.showNow(id: Notifications.idFor('chat_$id'), activityId: 'chat',
-          title: 'رسالة جديدة', body: 'رسالة جديدة في دردشة النادي');
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final sessionReg = prefs.getString('epc_session_v2');
+    final isLoggedInMember = sessionReg != null && sessionReg.isNotEmpty;
+
+    // 1) إشعار قرار طلب الانضمام -> يصل حصراً للضيف صاحب الطلب فقط
+    if (kind == 'join_decision') {
+      final savedReqId = prefs.getString('epc_last_join_req_id') ?? '';
+      final savedGuestId = prefs.getString('epc_guest_id_v1') ?? '';
+      final reqId = data['requestId']?.toString() ?? id;
+      final targetGuest = data['guestId']?.toString() ?? '';
+      final isMyRequest = (savedReqId.isNotEmpty && savedReqId == reqId) ||
+          (savedGuestId.isNotEmpty && targetGuest.isNotEmpty && savedGuestId == targetGuest);
+      if (!isMyRequest) return;
+
+      final approved = data['status'] == 'approved';
+      final note = (data['note'] ?? '').toString().trim();
+      final reg = (data['regNumber'] ?? '').toString();
+      await Notifications.showNow(
+        id: Notifications.idFor('join_dec_$reqId'),
+        title: approved
+            ? '🎉 تم قبول طلب انضمامك لنادي رواد الاقتصاد!'
+            : 'بخصوص طلب انضمامك لنادي رواد الاقتصاد',
+        body: approved
+            ? 'أصبحت عضواً رسمياً! سجّل الدخول برقم التسجيل ($reg)${note.isNotEmpty ? ' • $note' : ''}'
+            : (note.isNotEmpty ? 'نعتذر لعدم قبول الطلب حالياً: $note' : 'نعتذر لعدم قبول طلبك في هذه الدورة.'),
+      );
       return;
     }
+
+    // 2) إشعار طلب انضمام جديد -> يصل للقائد فقط
+    if (kind == 'join_request_new') {
+      if (!isLoggedInMember) return;
+      final storedLeader = prefs.getString('epc_leader_reg');
+      final leaderReg = (storedLeader != null && storedLeader.isNotEmpty)
+          ? storedLeader
+          : MemberStore.instance.leaderReg;
+      if (sessionReg != leaderReg) return;
+      final applicant = data['applicantName']?.toString() ?? 'متقدم جديد';
+      final spec = data['specialization']?.toString() ?? '';
+      await Notifications.showNow(
+        id: Notifications.idFor('join_new_$id'),
+        title: 'طلب انضمام جديد للنادي',
+        body: spec.isNotEmpty ? '$applicant — $spec' : applicant,
+      );
+      return;
+    }
+
+    // 3) إشعار الدردشة -> للأعضاء والقائد فقط (وليس للضيوف ولا للمرسِل)
+    if (kind == 'chat') {
+      if (!isLoggedInMember) return;
+      final hash = base64Url.encode(sha256.convert(utf8.encode(sessionReg)).bytes).replaceAll('=', '');
+      if (hash == data['senderHash']) return;
+      final senderName = data['senderName']?.toString() ?? '';
+      await Notifications.showNow(
+        id: Notifications.idFor('chat_$id'),
+        activityId: 'chat',
+        title: senderName.isNotEmpty ? 'رسالة من $senderName' : 'رسالة جديدة',
+        body: 'رسالة جديدة في دردشة أعضاء النادي',
+      );
+      return;
+    }
+
+    // 4) إشعارات النشاطات المجدولة والمنبّهات -> للأعضاء والقائد فقط (لا تصل للضيوف)
+    if (!isLoggedInMember) return;
+
     final reminderId = Notifications.idFor('activity_$id');
     if (data['operation'] == 'delete') {
       await Notifications.cancel(reminderId);
       return;
     }
     final title = data['title']?.toString() ?? 'نشاط النادي';
-    final date = DateTime.tryParse(data['at']?.toString() ?? '');
+    final date = DateTime.tryParse(data['at']?.toString() ?? '')?.toLocal();
     final place = data['place']?.toString() ?? '';
     final updated = data['operation'] == 'update';
     await Notifications.showNow(
@@ -67,14 +135,17 @@ class PushNotifications {
     );
     if (MemberStore.instance.ready) await CloudSync.syncNow(MemberStore.instance);
     await Notifications.cancel(reminderId);
-    if (date != null && date.isAfter(DateTime.now())) {
-      await Notifications.scheduleAt(
-        id: reminderId,
-        activityId: id,
-        when: date,
-        title: 'تذكير: $title',
-        body: place.isEmpty ? 'حان وقت النشاط' : place,
-      );
+    if (date != null) {
+      final alarmWhen = ActivityNotifier.alarmTimeFor(date);
+      if (alarmWhen != null) {
+        await Notifications.scheduleAt(
+          id: reminderId,
+          activityId: id,
+          when: alarmWhen,
+          title: 'منبّه قبل 10 دقائق: $title',
+          body: place.isEmpty ? 'النشاط يبدأ بعد 10 دقائق' : '$place • يبدأ بعد 10 دقائق',
+        );
+      }
     }
   }
 

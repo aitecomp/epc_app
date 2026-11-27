@@ -1,9 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../core/cloud_sync.dart';
 import '../core/club_api.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
+import '../widgets/member_card.dart';
 
 const List<String> kIdeaCategories = [
   'مبادرة اقتصادية',
@@ -13,7 +16,7 @@ const List<String> kIdeaCategories = [
   'تطوير النادي',
 ];
 
-/// قسم الأفكار والمشاريع بالتصويت (خاص بأعضاء النادي والقائد فقط — لا يظهر للضيوف)
+/// قسم الأفكار والاستطلاعات (قبول الفكرة / رفض الفكرة + نسب مئوية + صورة واسم العضو — للأعضاء فقط)
 class IdeasTab extends StatefulWidget {
   final MemberStore store;
   final bool isLeader;
@@ -33,6 +36,7 @@ class _IdeasTabState extends State<IdeasTab> {
   List<IdeaItem> _ideas = [];
   bool _loading = true;
   String _sortMode = 'votes'; // votes | newest | approved
+  final Set<String> _votingIds = {};
 
   @override
   void initState() {
@@ -64,7 +68,7 @@ class _IdeasTabState extends State<IdeasTab> {
         ? _ideas.where((i) => i.status == 'approved' || i.status == 'completed').toList()
         : List<IdeaItem>.from(_ideas);
     if (_sortMode == 'votes') {
-      list.sort((a, b) => b.votesCount.compareTo(a.votesCount));
+      list.sort((a, b) => b.agreeCount.compareTo(a.agreeCount));
     } else {
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
@@ -80,30 +84,29 @@ class _IdeasTabState extends State<IdeasTab> {
     );
     if (created != null && mounted) {
       setState(() => _ideas = [created, ..._ideas]);
-      toast(context, 'تم نشر فكرتك بنجاح للتصويت!');
+      toast(context, 'تم نشر الاستطلاع للتصويت بنجاح ✓');
     }
   }
 
-  Future<void> _vote(IdeaItem idea) async {
-    final prevVoted = idea.votedByMe;
-    final prevCount = idea.votesCount;
-    setState(() {
-      idea.votedByMe = !prevVoted;
-      idea.votesCount = (prevCount + (idea.votedByMe ? 1 : -1)).clamp(0, 999999);
-    });
+  Future<void> _vote(IdeaItem idea, String choice) async {
+    if (_votingIds.contains(idea.id)) return;
+    setState(() => _votingIds.add(idea.id));
     try {
-      final res = await _api.toggleIdeaVote(idea.id);
+      final res = await _api.voteIdea(idea.id, choice);
       if (!mounted) return;
       setState(() {
-        idea.votedByMe = res.voted;
-        idea.votesCount = res.votesCount;
+        idea.myVote = res.myVote;
+        idea.agreeCount = res.agreeCount;
+        idea.disagreeCount = res.disagreeCount;
+        idea.totalVotes = res.totalVotes;
+        idea.agreePercent = res.agreePercent;
+        idea.disagreePercent = res.disagreePercent;
+        _votingIds.remove(idea.id);
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        idea.votedByMe = prevVoted;
-        idea.votesCount = prevCount;
-      });
+      setState(() => _votingIds.remove(idea.id));
+      toast(context, 'تعذّر تسجيل التصويت', error: true);
     }
   }
 
@@ -113,16 +116,16 @@ class _IdeasTabState extends State<IdeasTab> {
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
-            const Text('تحديث حالة المشروع',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            const Text('تحديث حالة الفكرة / المشروع',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
             for (final entry in const [
               ('proposed', 'مقترحة', Icons.lightbulb_outline),
               ('reviewing', 'قيد الدراسة', Icons.manage_search_rounded),
@@ -130,10 +133,11 @@ class _IdeasTabState extends State<IdeasTab> {
               ('completed', 'مكتملة', Icons.verified_outlined),
             ])
               ListTile(
-                leading: Icon(entry.$3, color: AppColors.purple),
-                title: Text(entry.$2, style: const TextStyle(fontWeight: FontWeight.w700)),
+                dense: true,
+                leading: Icon(entry.$3, color: AppColors.purple, size: 20),
+                title: Text(entry.$2, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                 trailing: idea.status == entry.$1
-                    ? const Icon(Icons.check_circle, color: AppColors.gold)
+                    ? const Icon(Icons.check_circle, color: AppColors.gold, size: 20)
                     : null,
                 onTap: () => Navigator.pop(ctx, entry.$1),
               ),
@@ -162,75 +166,92 @@ class _IdeasTabState extends State<IdeasTab> {
 
   Future<void> _openDiscussion(IdeaItem idea) async {
     final ctrl = TextEditingController();
+    bool sending = false;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
-          final bottom = MediaQuery.viewInsetsOf(ctx).bottom;
+          final bottom = MediaQuery.viewInsetsOf(ctx).bottom + MediaQuery.paddingOf(ctx).bottom;
           return Container(
             height: MediaQuery.sizeOf(ctx).height * 0.68,
-            padding: EdgeInsets.fromLTRB(18, 12, 18, bottom + 14),
+            padding: EdgeInsets.fromLTRB(16, 10, 16, bottom + 12),
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               children: [
                 Container(
-                  width: 42,
+                  width: 38,
                   height: 4,
-                  decoration: BoxDecoration(
-                      color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text('مناقشة: ${idea.title}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                const Divider(height: 20),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                const Divider(height: 18),
                 Expanded(
                   child: idea.comments.isEmpty
                       ? const Center(
                           child: Text('لا توجد نقاشات بعد. شارك رأيك في هذه الفكرة!',
-                              style: TextStyle(color: AppColors.muted)),
+                              style: TextStyle(color: AppColors.muted, fontSize: 13)),
                         )
                       : ListView.separated(
                           itemCount: idea.comments.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (_, i) {
                             final c = idea.comments[i];
+                            final member = findMemberByReg(widget.store, c.authorId);
                             return Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: AppColors.cream,
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(color: AppColors.line),
                               ),
-                              child: Column(
+                              child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Text(c.authorName,
-                                          style: const TextStyle(
-                                              fontSize: 12.5, fontWeight: FontWeight.w800)),
-                                      const Spacer(),
-                                      Text(relativeTimeAr(c.createdAt),
-                                          style: const TextStyle(
-                                              fontSize: 10.5, color: AppColors.muted)),
-                                    ],
+                                  if (member != null)
+                                    MemberAvatar(member: member, size: 28)
+                                  else
+                                    const CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: AppColors.softViolet,
+                                      child: Icon(Icons.person_outline, size: 15, color: AppColors.purple),
+                                    ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(c.authorName,
+                                                style: const TextStyle(
+                                                    fontSize: 12, fontWeight: FontWeight.w800)),
+                                            const Spacer(),
+                                            Text(relativeTimeAr(c.createdAt),
+                                                style: const TextStyle(
+                                                    fontSize: 10, color: AppColors.muted)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(c.text, style: const TextStyle(fontSize: 12.5, height: 1.45)),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(c.text, style: const TextStyle(fontSize: 13, height: 1.5)),
                                 ],
                               ),
                             );
                           },
                         ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -241,22 +262,31 @@ class _IdeasTabState extends State<IdeasTab> {
                     ),
                     const SizedBox(width: 8),
                     CircleAvatar(
-                      radius: 24,
+                      radius: 21,
                       backgroundColor: AppColors.purple,
                       child: IconButton(
-                        icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                        onPressed: () async {
-                          final txt = ctrl.text.trim();
-                          if (txt.isEmpty) return;
-                          try {
-                            final c = await _api.addIdeaComment(idea.id, txt);
-                            idea.comments = [...idea.comments, c];
-                            idea.commentsCount = idea.comments.length;
-                            ctrl.clear();
-                            setSheetState(() {});
-                            if (mounted) setState(() {});
-                          } catch (_) {}
-                        },
+                        icon: sending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                        onPressed: sending
+                            ? null
+                            : () async {
+                                final txt = ctrl.text.trim();
+                                if (txt.isEmpty) return;
+                                setSheetState(() => sending = true);
+                                try {
+                                  final c = await _api.addIdeaComment(idea.id, txt);
+                                  idea.comments = [...idea.comments, c];
+                                  idea.commentsCount = idea.comments.length;
+                                  ctrl.clear();
+                                  if (mounted) setState(() {});
+                                } catch (_) {}
+                                setSheetState(() => sending = false);
+                              },
                       ),
                     ),
                   ],
@@ -284,34 +314,41 @@ class _IdeasTabState extends State<IdeasTab> {
           _header(top),
           _sortBar(),
           Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset(context)),
+            padding: EdgeInsets.fromLTRB(14, 10, 14, bottomInset(context)),
             child: Column(
               children: [
                 PrimaryButton(
-                  label: 'اقترح فكرة أو مشروعاً جديداً',
+                  label: 'طرح فكرة أو استطلاع جديد',
                   icon: Icons.lightbulb_outline_rounded,
                   gold: true,
                   onPressed: _openCreateSheet,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 if (_loading)
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 50),
-                    child: Center(child: CircularProgressIndicator(color: AppColors.purple)),
+                    padding: EdgeInsets.symmetric(vertical: 46),
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(color: AppColors.purple, strokeWidth: 2.4),
+                        SizedBox(height: 10),
+                        Text('جاري تحميل الأفكار والاستطلاعات...',
+                            style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                      ],
+                    ),
                   )
                 else if (list.isEmpty)
                   const EmptyState(
-                    icon: Icons.tips_and_updates_outlined,
-                    title: 'مساحة الإبداع بانتظار أفكارك',
-                    subtitle: 'اقترح مشروعاً أو مبادرة للنادي ليصوّت عليها الأعضاء وتدخل حيّز التنفيذ.',
+                    icon: Icons.poll_outlined,
+                    title: 'لا توجد أفكار أو استطلاعات بعد',
+                    subtitle: 'اقترح فكرة أو مشروعاً ليصوّت الأعضاء بقبولها أو رفضها مع نسب فورية.',
                   )
                 else
                   for (var i = 0; i < list.length; i++) ...[
                     FadeSlideIn(
-                      delayMs: (i * 55).clamp(0, 260),
+                      delayMs: (i * 45).clamp(0, 220),
                       child: _ideaCard(list[i], rank: _sortMode == 'votes' ? i + 1 : null),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                   ],
               ],
             ),
@@ -323,36 +360,36 @@ class _IdeasTabState extends State<IdeasTab> {
 
   Widget _header(double top) {
     return Container(
-      padding: EdgeInsets.fromLTRB(20, top + 14, 20, 22),
+      padding: EdgeInsets.fromLTRB(16, top + 12, 16, 16),
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
         ),
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               gradient: AppColors.goldGradient,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.tips_and_updates_rounded, color: AppColors.plum, size: 25),
+            child: const Icon(Icons.poll_rounded, color: AppColors.plum, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('الأفكار والمشاريع',
+                const Text('الأفكار والاستطلاعات',
                     style: TextStyle(
-                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
-                Text('مختبر أفكار أعضاء النادي • صوّت لأفضل المشاريع',
+                        color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                Text('صوّت بقبول أو رفض الأفكار والمشاريع • خاص بالأعضاء',
                     style: TextStyle(
-                        color: AppColors.goldSoft.withValues(alpha: 0.9), fontSize: 11.5)),
+                        color: AppColors.goldSoft.withValues(alpha: 0.9), fontSize: 10.5)),
               ],
             ),
           ),
@@ -363,13 +400,13 @@ class _IdeasTabState extends State<IdeasTab> {
 
   Widget _sortBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
       child: Row(
         children: [
-          _sortChip('votes', 'الأعلى تصويتاً 🔥'),
-          const SizedBox(width: 8),
+          _sortChip('votes', 'الأكثر قبولاً 🔥'),
+          const SizedBox(width: 7),
           _sortChip('newest', 'الأحدث'),
-          const SizedBox(width: 8),
+          const SizedBox(width: 7),
           _sortChip('approved', 'معتمدة'),
         ],
       ),
@@ -382,19 +419,19 @@ class _IdeasTabState extends State<IdeasTab> {
       child: GestureDetector(
         onTap: () => setState(() => _sortMode = mode),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
             gradient: active ? AppColors.headerGradient : null,
-            color: active ? null : Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            color: active ? null : Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: active ? AppColors.purple : AppColors.line),
           ),
           child: Center(
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w800,
                 color: active ? Colors.white : AppColors.muted,
               ),
@@ -407,160 +444,197 @@ class _IdeasTabState extends State<IdeasTab> {
 
   Widget _ideaCard(IdeaItem idea, {int? rank}) {
     final statusInfo = _statusStyle(idea.status);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: rank == 1 ? AppColors.gold.withValues(alpha: 0.6) : AppColors.line,
-          width: rank == 1 ? 1.4 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.plum.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 7),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ChipTag(text: idea.category, color: AppColors.purple),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: widget.isLeader ? () => _changeStatus(idea) : null,
-                child: ChipTag(text: statusInfo.$1, color: statusInfo.$2, icon: statusInfo.$3),
+    final author = findMemberByReg(widget.store, idea.authorId);
+    final voting = _votingIds.contains(idea.id);
+    final agreeFlex = idea.totalVotes > 0 ? idea.agreePercent.clamp(0, 100) : 50;
+    final disagreeFlex = idea.totalVotes > 0 ? idea.disagreePercent.clamp(0, 100) : 50;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.90),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: rank == 1 ? AppColors.gold.withValues(alpha: 0.55) : Colors.white,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.plum.withValues(alpha: 0.045),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
-              const Spacer(),
-              if (rank != null && rank <= 3 && idea.votesCount > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.goldGradient,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text('#$rank',
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.plum)),
-                ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(idea.title,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 6),
-                    Text(idea.description,
-                        style: const TextStyle(
-                            fontSize: 13.2, color: Color(0xFF475569), height: 1.55)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // ── زر التصويت التفاعلي ──
-              GestureDetector(
-                onTap: () => _vote(idea),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  width: 58,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: idea.votedByMe ? AppColors.goldGradient : null,
-                    color: idea.votedByMe ? null : AppColors.softViolet,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: idea.votedByMe ? AppColors.gold : AppColors.line,
+              // ── صورة واسم صاحب الفكرة + التصنيف والحالة ──
+              Row(
+                children: [
+                  if (author != null)
+                    MemberAvatar(member: author, size: 34)
+                  else
+                    const CircleAvatar(
+                      radius: 17,
+                      backgroundColor: AppColors.softViolet,
+                      child: Icon(Icons.person_outline, size: 17, color: AppColors.purple),
+                    ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(idea.authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                        Text('${idea.authorRole} • ${relativeTimeAr(idea.createdAt)}',
+                            style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
+                      ],
                     ),
                   ),
-                  child: Column(
+                  GestureDetector(
+                    onTap: widget.isLeader ? () => _changeStatus(idea) : null,
+                    child: ChipTag(text: statusInfo.$1, color: statusInfo.$2, icon: statusInfo.$3),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  ChipTag(text: idea.category, color: AppColors.purple),
+                  if (rank != null && rank <= 3 && idea.agreeCount > 0)
+                    ChipTag(text: '#$rank الأعلى قبولاً', color: AppColors.gold),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(idea.title,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(idea.description,
+                  style: const TextStyle(
+                      fontSize: 12.8, color: Color(0xFF475569), height: 1.5)),
+              if (idea.expectedImpact.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.softViolet,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Row(
                     children: [
-                      Icon(
-                        idea.votedByMe
-                            ? Icons.keyboard_double_arrow_up_rounded
-                            : Icons.keyboard_arrow_up_rounded,
-                        color: idea.votedByMe ? AppColors.plum : AppColors.purple,
-                        size: 24,
-                      ),
-                      Text(
-                        '${idea.votesCount}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: idea.votedByMe ? AppColors.plum : AppColors.purple,
-                        ),
-                      ),
-                      Text(
-                        'صوت',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: idea.votedByMe ? AppColors.plum : AppColors.muted,
-                        ),
+                      const Icon(Icons.auto_graph_rounded, size: 15, color: AppColors.gold),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text('الأثر المتوقع: ${idea.expectedImpact}',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          if (idea.expectedImpact.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.softViolet,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+              ],
+
+              // ── شريط نسب التصويت (قبول / رفض) ──
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  const Icon(Icons.auto_graph_rounded, size: 16, color: AppColors.gold),
-                  const SizedBox(width: 6),
+                  Text('قبول ${idea.agreePercent}% (${idea.agreeCount})',
+                      style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF15803D))),
+                  const Spacer(),
+                  Text('إجمالي الأصوات: ${idea.totalVotes}',
+                      style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
+                  const Spacer(),
+                  Text('رفض ${idea.disagreePercent}% (${idea.disagreeCount})',
+                      style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFB91C1C))),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: 8,
+                  child: idea.totalVotes == 0
+                      ? Container(color: AppColors.line)
+                      : Row(
+                          children: [
+                            if (agreeFlex > 0)
+                              Expanded(
+                                flex: agreeFlex,
+                                child: Container(color: const Color(0xFF16A34A)),
+                              ),
+                            if (disagreeFlex > 0)
+                              Expanded(
+                                flex: disagreeFlex,
+                                child: Container(color: const Color(0xFFDC2626)),
+                              ),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // ── أزرار التصويت بقبول الفكرة أو رفضها ──
+              Row(
+                children: [
                   Expanded(
-                    child: Text('الأثر المتوقع: ${idea.expectedImpact}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: _VoteChoiceButton(
+                      label: 'قبول الفكرة',
+                      icon: Icons.thumb_up_alt_rounded,
+                      active: idea.myVote == 'agree',
+                      loading: voting,
+                      color: const Color(0xFF15803D),
+                      onTap: () => _vote(idea, 'agree'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _VoteChoiceButton(
+                      label: 'رفض الفكرة',
+                      icon: Icons.thumb_down_alt_rounded,
+                      active: idea.myVote == 'disagree',
+                      loading: voting,
+                      color: const Color(0xFFB91C1C),
+                      onTap: () => _vote(idea, 'disagree'),
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
-          const Divider(height: 22),
-          Row(
-            children: [
-              const Icon(Icons.person_outline, size: 15, color: AppColors.muted),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  '${idea.authorName} • ${relativeTimeAr(idea.createdAt)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
-                ),
+              const Divider(height: 18),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _openDiscussion(idea),
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    icon: const Icon(Icons.forum_outlined, size: 16),
+                    label: Text('نقاش (${idea.commentsCount})',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                  const Spacer(),
+                  if (widget.isLeader || idea.isMine)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFB91C1C)),
+                      onPressed: () => _deleteIdea(idea),
+                    ),
+                ],
               ),
-              TextButton.icon(
-                onPressed: () => _openDiscussion(idea),
-                icon: const Icon(Icons.forum_outlined, size: 16),
-                label: Text('نقاش (${idea.commentsCount})',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
-              if (widget.isLeader || idea.isMine)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFB91C1C)),
-                  onPressed: () => _deleteIdea(idea),
-                ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -576,6 +650,56 @@ class _IdeasTabState extends State<IdeasTab> {
       default:
         return ('مقترحة', AppColors.muted, Icons.lightbulb_outline);
     }
+  }
+}
+
+class _VoteChoiceButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final bool loading;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _VoteChoiceButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.loading,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: loading ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+        decoration: BoxDecoration(
+          color: active ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? color : color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: active ? Colors.white : color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: active ? Colors.white : color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -626,12 +750,12 @@ class _CreateIdeaSheetState extends State<_CreateIdeaSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom + MediaQuery.paddingOf(context).bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 14, 20, bottom + 22),
+      padding: EdgeInsets.fromLTRB(18, 12, 18, bottom + 18),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -640,25 +764,25 @@ class _CreateIdeaSheetState extends State<_CreateIdeaSheet> {
           children: [
             Center(
               child: Container(
-                width: 44,
+                width: 40,
                 height: 4,
-                decoration: BoxDecoration(
-                    color: AppColors.line, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(4)),
               ),
             ),
-            const SizedBox(height: 14),
-            const Text('طرح فكرة أو مشروع جديد',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const Text('سيتمكن أعضاء النادي من التصويت ومناقشة فكرتك.',
-                style: TextStyle(fontSize: 12, color: AppColors.muted)),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            const Text('طرح فكرة أو استطلاع جديد',
+                style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
+            const Text('سيصوّت الأعضاء بقبول الفكرة أو رفضها مع ظهور النسب.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.muted)),
+            const SizedBox(height: 12),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 for (final c in kIdeaCategories)
                   ChoiceChip(
-                    label: Text(c, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    visualDensity: VisualDensity.compact,
+                    label: Text(c, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
                     selected: _category == c,
                     selectedColor: AppColors.purple,
                     labelStyle: TextStyle(color: _category == c ? Colors.white : AppColors.ink),
@@ -666,33 +790,37 @@ class _CreateIdeaSheetState extends State<_CreateIdeaSheet> {
                   ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextField(
               controller: _titleCtrl,
               decoration: const InputDecoration(
                 hintText: 'عنوان الفكرة أو المشروع',
-                prefixIcon: Icon(Icons.lightbulb_outline, color: AppColors.purple),
+                prefixIcon: Icon(Icons.lightbulb_outline, color: AppColors.purple, size: 19),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             TextField(
               controller: _descCtrl,
-              maxLines: 4,
+              maxLines: 3,
               decoration: const InputDecoration(
-                hintText: 'اشرح الفكرة، أهدافها، وكيف يمكن تنفيذها داخل النادي...',
+                hintText: 'اشرح الفكرة وأهدافها وكيف يمكن تنفيذها...',
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             TextField(
               controller: _impactCtrl,
               decoration: const InputDecoration(
-                hintText: 'الأثر المتوقع (اختياري — مثال: تدريب 50 طالباً)',
-                prefixIcon: Icon(Icons.auto_graph_rounded, color: AppColors.gold),
+                hintText: 'الأثر المتوقع (اختياري)',
+                prefixIcon: Icon(Icons.auto_graph_rounded, color: AppColors.gold, size: 19),
               ),
             ),
-            const SizedBox(height: 18),
+            if (_saving) ...[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(color: AppColors.gold, backgroundColor: AppColors.softViolet),
+            ],
+            const SizedBox(height: 14),
             PrimaryButton(
-              label: 'نشر الفكرة للتصويت',
+              label: _saving ? 'جاري النشر...' : 'نشر للاستطلاع',
               icon: Icons.rocket_launch_outlined,
               loading: _saving,
               onPressed: _submit,
