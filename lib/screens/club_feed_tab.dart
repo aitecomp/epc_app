@@ -639,6 +639,7 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                           ),
                         ],
                       ),
+                      ),
                     ),
                     ChipTag(text: post.category, color: AppColors.purple),
                     if (widget.isLeader)
