@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
+import '../widgets/smart_text.dart';
 
 class ActivityDetailScreen extends StatelessWidget {
   final Activity activity;
@@ -25,7 +26,7 @@ class ActivityDetailScreen extends StatelessWidget {
             const SizedBox(height: 20),
             const Text('تفاصيل النشاط', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
             const SizedBox(height: 8),
-            Text(activity.details, style: const TextStyle(fontSize: 15, height: 1.7)),
+            RichSmartText(activity.details, store: MemberStore.instance, style: const TextStyle(fontSize: 15, height: 1.7)),
           ],
         ]),
       ),

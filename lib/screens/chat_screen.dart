@@ -16,6 +16,7 @@ import '../core/chat_unread.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
+import '../widgets/smart_text.dart';
 import 'chat_member_profile.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -33,12 +34,14 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? poll;
   List<Map<String, dynamic>> messages = [];
   Map<String, dynamic>? reply;
+  List<Member> mentionSuggestions = const [];
   bool loading = true, sending = false, recording = false, fetching = false;
   String? error;
 
   @override
   void initState() {
     super.initState();
+    text.addListener(_onTextChanged);
     refresh();
     poll = Timer.periodic(const Duration(seconds: 8), (_) => refresh());
   }
@@ -51,7 +54,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
   @override
-  void dispose() { poll?.cancel(); text.dispose(); recorder.dispose(); super.dispose(); }
+  void _onTextChanged() {
+    final next = matchMentionCandidates(widget.store, text.text, text.selection.baseOffset);
+    if (next.length != mentionSuggestions.length || (next.isNotEmpty && mentionSuggestions.isNotEmpty && next.first.id != mentionSuggestions.first.id)) {
+      if (mounted) setState(() => mentionSuggestions = next);
+    }
+  }
+  @override
+  void dispose() { poll?.cancel(); text.removeListener(_onTextChanged); text.dispose(); recorder.dispose(); super.dispose(); }
   void fail(Object e) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Bad state: ', ''))));
   }
@@ -179,6 +189,28 @@ class _ChatScreenState extends State<ChatScreen> {
       Container(padding: EdgeInsets.fromLTRB(16, top + 12, 16, 14), decoration: const BoxDecoration(gradient: AppColors.headerGradient, borderRadius: BorderRadius.vertical(bottom: Radius.circular(24))),
         child: const Row(children: [CircleAvatar(radius: 18, backgroundColor: Colors.white24, child: Icon(Icons.forum_rounded, color: AppColors.goldSoft, size: 19)), SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('دردشة النادي', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)), Text('مساحة تواصل أعضاء نادي رواد الاقتصاد', style: TextStyle(color: Colors.white70, fontSize: 11))]))])),
       Expanded(child: loading ? const Center(child: CircularProgressIndicator()) : error != null && messages.isEmpty ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(error!), TextButton(onPressed: refresh, child: const Text('إعادة المحاولة'))])) : messages.isEmpty ? const Center(child: Text('ابدأ المحادثة مع أعضاء النادي')) : RefreshIndicator(onRefresh: refresh, child: ListView.builder(reverse: true, padding: const EdgeInsets.all(14), itemCount: messages.length, itemBuilder: (context, index) => messageBubble(messages[messages.length - index - 1])))),
+      if (mentionSuggestions.isNotEmpty)
+        Container(
+          height: 46,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: mentionSuggestions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (_, i) {
+              final cand = mentionSuggestions[i];
+              return ActionChip(
+                avatar: MemberAvatar(member: cand, size: 22),
+                label: Text('@${cand.fullName}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+                onPressed: () {
+                  insertMemberMention(text, cand);
+                  setState(() => mentionSuggestions = const []);
+                },
+              );
+            },
+          ),
+        ),
       if (reply != null) Container(color: AppColors.softViolet, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: Row(children: [Expanded(child: Text('رد على ${reply!['authorName']}: ${reply!['text']}', maxLines: 1, overflow: TextOverflow.ellipsis)), IconButton(onPressed: () => setState(() => reply = null), icon: const Icon(Icons.close))])),
       Padding(padding: EdgeInsets.fromLTRB(10, 4, 10, keyboard > 0 ? 8 : MediaQuery.paddingOf(context).bottom + 6), child: Row(children: [
         PopupMenuButton<String>(tooltip: 'إرفاق', onSelected: (v) => attach(v == 'video'), itemBuilder: (_) => const [PopupMenuItem(value: 'image', child: Text('صورة')), PopupMenuItem(value: 'video', child: Text('فيديو'))], icon: const Icon(Icons.attach_file_rounded)),
@@ -218,7 +250,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _VoiceMessage(key: ValueKey('voice_${m['id']}'), url: mediaUrl, own: own),
         if (mediaUrl.isNotEmpty && type.startsWith('audio/'))
           Align(alignment: Alignment.centerLeft, child: InkWell(onTap: () async { try { await saveMedia(mediaUrl); } catch (e) { fail(e); } }, child: const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.download_rounded, size: 17, color: AppColors.muted)))),
-        if ((m['text'] as String? ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: Text(m['text'] as String, style: const TextStyle(fontSize: 14, height: 1.48, color: AppColors.ink))),
+        if ((m['text'] as String? ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: RichSmartText(m['text'] as String, store: widget.store, style: const TextStyle(fontSize: 14, height: 1.48, color: AppColors.ink))),
         const SizedBox(height: 4),
         Row(mainAxisSize: MainAxisSize.min, children: [
           if (date != null) Text('${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 10, color: AppColors.muted)),

@@ -7,6 +7,7 @@ import '../core/club_api.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
+import '../widgets/smart_text.dart';
 import 'chat_member_profile.dart';
 
 const List<String> kIdeaCategories = [
@@ -36,7 +37,8 @@ class _IdeasTabState extends State<IdeasTab> {
   late final ClubApi _api = ClubApi(widget.store);
   List<IdeaItem> _ideas = [];
   bool _loading = true;
-  String _sortMode = 'votes'; // votes | newest | approved
+  String _sortMode = 'votes';
+  String? _activeHashtag; // votes | newest | approved
   final Set<String> _votingIds = {};
 
   @override
@@ -65,9 +67,13 @@ class _IdeasTabState extends State<IdeasTab> {
   }
 
   List<IdeaItem> get _displayed {
-    final list = _sortMode == 'approved'
+    var list = _sortMode == 'approved'
         ? _ideas.where((i) => i.status == 'approved' || i.status == 'completed').toList()
         : List<IdeaItem>.from(_ideas);
+    if (_activeHashtag != null && _activeHashtag!.isNotEmpty) {
+      final tag = _activeHashtag!.toLowerCase();
+      list = list.where((i) => i.description.toLowerCase().contains(tag) || i.title.toLowerCase().contains(tag)).toList();
+    }
     if (_sortMode == 'votes') {
       list.sort((a, b) => b.agreeCount.compareTo(a.agreeCount));
     } else {
@@ -257,7 +263,7 @@ class _IdeasTabState extends State<IdeasTab> {
                                           ],
                                         ),
                                         const SizedBox(height: 3),
-                                        Text(c.text, style: const TextStyle(fontSize: 12.5, height: 1.45)),
+                                        RichSmartText(c.text, store: widget.store, style: const TextStyle(fontSize: 12.5, height: 1.45)),
                                       ],
                                     ),
                                   ),
@@ -329,6 +335,21 @@ class _IdeasTabState extends State<IdeasTab> {
         children: [
           _header(top),
           _sortBar(),
+          if (_activeHashtag != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+              child: Row(
+                children: [
+                  ChipTag(text: 'تصفية: $_activeHashtag', color: AppColors.purple, icon: Icons.tag_rounded),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => setState(() => _activeHashtag = null),
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    child: const Text('إلغاء', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: EdgeInsets.fromLTRB(14, 10, 14, bottomInset(context)),
             child: Column(
@@ -546,7 +567,9 @@ class _IdeasTabState extends State<IdeasTab> {
               Text(idea.title,
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              Text(idea.description,
+              RichSmartText(idea.description,
+                  store: widget.store,
+                  onHashtagTap: (tag) => setState(() => _activeHashtag = tag),
                   style: const TextStyle(
                       fontSize: 12.8, color: Color(0xFF475569), height: 1.5)),
               if (idea.expectedImpact.isNotEmpty) ...[

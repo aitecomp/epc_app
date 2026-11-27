@@ -14,6 +14,7 @@ import '../core/club_api.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
 import '../widgets/member_card.dart';
+import '../widgets/smart_text.dart';
 import 'chat_member_profile.dart';
 
 const List<String> kFeedCategories = [
@@ -53,6 +54,7 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
   bool _loading = true;
   String? _error;
   String _selectedCategory = 'الكل';
+  String? _activeHashtag;
 
   @override
   void initState() {
@@ -84,8 +86,14 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
   }
 
   List<ClubPost> get _filteredPosts {
-    if (_selectedCategory == 'الكل') return _posts;
-    return _posts.where((p) => p.category == _selectedCategory).toList();
+    var list = _selectedCategory == 'الكل'
+        ? _posts
+        : _posts.where((p) => p.category == _selectedCategory).toList();
+    if (_activeHashtag != null && _activeHashtag!.isNotEmpty) {
+      final tag = _activeHashtag!.toLowerCase();
+      list = list.where((p) => p.caption.toLowerCase().contains(tag) || p.title.toLowerCase().contains(tag)).toList();
+    }
+    return list;
   }
 
   Future<void> _openComposer() async {
@@ -265,6 +273,21 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
           _header(context, top),
           if (widget.isGuest) _guestJoinBanner(),
           _categoryBar(),
+          if (_activeHashtag != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+              child: Row(
+                children: [
+                  ChipTag(text: 'تصفية: $_activeHashtag', color: AppColors.purple, icon: Icons.tag_rounded),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => setState(() => _activeHashtag = null),
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    child: const Text('إلغاء', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: EdgeInsets.fromLTRB(14, 10, 14, bottomInset(context)),
             child: Column(
@@ -320,6 +343,7 @@ class _ClubFeedTabState extends State<ClubFeedTab> {
                         onComment: () => _openComments(items[i]),
                         onShare: () => _sharePost(items[i]),
                         onDelete: () => _deletePost(items[i]),
+                        onHashtagTap: (tag) => setState(() => _activeHashtag = tag),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -510,6 +534,7 @@ class _ClubPostCard extends StatefulWidget {
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onDelete;
+  final ValueChanged<String>? onHashtagTap;
 
   const _ClubPostCard({
     required this.store,
@@ -519,6 +544,7 @@ class _ClubPostCard extends StatefulWidget {
     required this.onComment,
     required this.onShare,
     required this.onDelete,
+    this.onHashtagTap,
   });
 
   @override
@@ -671,8 +697,11 @@ class _ClubPostCardState extends State<_ClubPostCard> {
                       if (post.title.isNotEmpty && post.caption.isNotEmpty)
                         const SizedBox(height: 4),
                       if (post.caption.isNotEmpty)
-                        Text(
+                        RichSmartText(
                           post.caption,
+                          store: widget.store,
+                          allowProfileNavigation: widget.store.sessionReg != null,
+                          onHashtagTap: widget.onHashtagTap,
                           style: const TextStyle(
                             fontSize: 13,
                             height: 1.55,
@@ -1510,7 +1539,7 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(c.text, style: const TextStyle(fontSize: 12.5, height: 1.45)),
+                                  RichSmartText(c.text, store: widget.store, allowProfileNavigation: !widget.isGuest, style: const TextStyle(fontSize: 12.5, height: 1.45)),
                                 ],
                               ),
                             ),
